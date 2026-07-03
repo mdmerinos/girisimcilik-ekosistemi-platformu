@@ -14,7 +14,7 @@ export function OpportunityImage({
   if (!src || failed) return null;
 
   return (
-    <div className="-mx-5 -mt-5 mb-5 aspect-[16/9] overflow-hidden rounded-t-2xl bg-[#f0f3ef]">
+    <div className="-mx-5 -mt-5 mb-5 aspect-[16/9] overflow-hidden rounded-t-2xl bg-[var(--atlas-surface)]">
       {/* Dynamic source domains cannot be enumerated safely for next/image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

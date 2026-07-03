@@ -153,6 +153,10 @@ npm start
 - `.env.local` dosyasını GitHub’a yüklemeyin.
 - `SUPABASE_SERVICE_ROLE_KEY`, `INGESTION_SECRET` ve `CRON_SECRET` yalnız
   sunucu ortamında tutulmalıdır.
+- Harici NATO DIANA worker kullanılacaksa Vercel tarafında isteğe bağlı
+  `BOT_INGESTION_SECRET`; GitHub Actions tarafında `WORKER_INGESTION_URL` ve
+  `WORKER_INGESTION_SECRET` repository secret değerleri tanımlanmalıdır.
+  Ayrıntılar `workers/nato-diana/README.md` dosyasındadır.
 - Service-role anahtarını istemci bileşenlerinde veya `NEXT_PUBLIC_` isimli bir
   değişkende kullanmayın.
 - `node_modules`, `.next`, `.vercel`, `tsconfig.tsbuildinfo` ve

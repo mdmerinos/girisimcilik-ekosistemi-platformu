@@ -7,6 +7,11 @@ import {
   isStrictInvestmentOpportunity,
 } from "@/lib/ingestion/investmentClassification";
 import {
+  COUNTRY_GROUPS,
+  matchesCountryGroup,
+} from "@/lib/opportunities/countryGroup";
+import { sanitizeNasaSbirOpportunityDates } from "@/lib/opportunities/nasaSbirDates";
+import {
   createAdminSupabaseClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/admin";
@@ -18,6 +23,7 @@ const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(100),
   page: z.coerce.number().int().min(1).default(1),
   category: z.enum(OPPORTUNITY_CATEGORIES).optional(),
+  countryGroup: z.enum(COUNTRY_GROUPS).default("all"),
   q: z.string().trim().max(100).optional(),
 });
 
@@ -67,7 +73,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { limit, page, category, q } = parsed.data;
+  const { limit, page, category, countryGroup, q } = parsed.data;
 
   if (isSupabaseConfigured()) {
     try {
@@ -76,6 +82,61 @@ export async function GET(request: NextRequest) {
       const isInvestmentRequest = category === INVESTMENT_CATEGORY;
       let data: Opportunity[] = [];
       let count = 0;
+
+      if (countryGroup !== "all") {
+        const [
+          { data: rows, error: rowsError },
+          { data: latestRows, error: latestError },
+        ] = await Promise.all([
+          supabase
+            .from("opportunities")
+            .select("*")
+            .order("is_featured", { ascending: false })
+            .order("published_at", { ascending: false, nullsFirst: false })
+            .limit(5000),
+          supabase
+            .from("opportunities")
+            .select("fetched_at")
+            .order("fetched_at", { ascending: false })
+            .limit(1),
+        ]);
+        if (rowsError) throw rowsError;
+        if (latestError) throw latestError;
+
+        const countryRows = ((rows ?? []) as Opportunity[])
+          .map(sanitizeNasaSbirOpportunityDates)
+          .filter((item) => matchesCountryGroup(item.location, countryGroup));
+        const filteredRows = countryRows.filter(
+          (item) =>
+            (!category || item.category === category) &&
+            matchesSearch(item, q) &&
+            isAllowedForCategory(item, category),
+        );
+        const categoryCounts = Object.fromEntries(
+          OPPORTUNITY_CATEGORIES.map((itemCategory) => [
+            itemCategory,
+            countryRows.filter(
+              (item) =>
+                item.category === itemCategory &&
+                isAllowedForCategory(item, itemCategory),
+            ).length,
+          ]),
+        );
+
+        return NextResponse.json({
+          data: filteredRows.slice(offset, offset + limit),
+          meta: {
+            source: "supabase",
+            count: filteredRows.length,
+            total: countryRows.length,
+            categoryCounts,
+            lastUpdated: latestRows?.[0]?.fetched_at ?? null,
+            page,
+            limit,
+            hasMore: offset + limit < filteredRows.length,
+          },
+        });
+      }
 
       if (isInvestmentRequest) {
         let investmentQuery = supabase
@@ -96,7 +157,9 @@ export async function GET(request: NextRequest) {
           (item) => isAllowedForCategory(item, category),
         );
         count = filteredInvestmentRows.length;
-        data = filteredInvestmentRows.slice(offset, offset + limit);
+        data = filteredInvestmentRows
+          .slice(offset, offset + limit)
+          .map(sanitizeNasaSbirOpportunityDates);
       } else {
         let query = supabase
           .from("opportunities")
@@ -110,7 +173,9 @@ export async function GET(request: NextRequest) {
 
         const { data: rows, error, count: rowCount } = await query;
         if (error) throw error;
-        data = (rows ?? []) as Opportunity[];
+        data = ((rows ?? []) as Opportunity[]).map(
+          sanitizeNasaSbirOpportunityDates,
+        );
         count = rowCount ?? 0;
       }
 
@@ -172,7 +237,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const filtered = fallbackOpportunities.filter((item) => {
+  const countryRows = fallbackOpportunities.filter((item) =>
+    matchesCountryGroup(item.location, countryGroup),
+  );
+  const filtered = countryRows.filter((item) => {
     const matchesCategory = !category || item.category === category;
     return (
       matchesCategory &&
@@ -180,17 +248,18 @@ export async function GET(request: NextRequest) {
       isAllowedForCategory(item, category)
     );
   });
+  const offset = (page - 1) * limit;
 
   return NextResponse.json({
-    data: filtered.slice(0, limit),
+    data: filtered.slice(offset, offset + limit),
     meta: {
       source: "fallback",
       count: filtered.length,
-      total: fallbackOpportunities.length,
+      total: countryRows.length,
       categoryCounts: Object.fromEntries(
         OPPORTUNITY_CATEGORIES.map((itemCategory) => [
           itemCategory,
-          fallbackOpportunities.filter(
+          countryRows.filter(
             (item) =>
               item.category === itemCategory &&
               isAllowedForCategory(item, itemCategory),
@@ -198,9 +267,9 @@ export async function GET(request: NextRequest) {
         ]),
       ),
       lastUpdated: fallbackOpportunities[0]?.fetched_at ?? null,
-      page: 1,
+      page,
       limit,
-      hasMore: false,
+      hasMore: offset + limit < filtered.length,
     },
   });
 }

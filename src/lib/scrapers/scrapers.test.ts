@@ -2,16 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { BotProtectionError } from "@/lib/ingestion/fetchWithRetry";
+import { resolveNasaSbirPublishedAt } from "@/lib/opportunities/nasaSbirDates";
+import {
+  parseDianaListingPage,
+  scrapeDiana,
+} from "@/lib/scrapers/dianaScraper";
+import { fetchEuFunding } from "@/lib/scrapers/euFundingApi";
 import { extractPageMetadata } from "@/lib/scrapers/extractPageMetadata";
 import { scrapeGenericHtml } from "@/lib/scrapers/genericHtmlScraper";
+import { resolveGrantsGovDeadline } from "@/lib/scrapers/grantsGovApi";
 import { scrapeKosgebSupports } from "@/lib/scrapers/kosgebScraper";
-import { scrapeOdtuTeknokent } from "@/lib/scrapers/odtuTeknokentScraper";
+import {
+  extractOdtuDeadlineAt,
+  extractOdtuPublishedAt,
+  parseOdtuListingPage,
+  scrapeOdtuTeknokent,
+} from "@/lib/scrapers/odtuTeknokentScraper";
 import { scrapeRss } from "@/lib/scrapers/rssScraper";
 import { scrapeTubitakBigg } from "@/lib/scrapers/tubitakScraper";
 import {
   getOpportunityLinkLabel,
   resolveOpportunityUrl,
 } from "@/lib/utils/opportunityUrl";
+import { parseDate } from "@/lib/utils/parseDate";
 
 test("generic HTML scraper maps matching cards", async () => {
   const originalFetch = globalThis.fetch;
@@ -311,10 +324,10 @@ test("ODTÜ Teknokent scraper uses the current news category path", async () => 
     requestedUrl = input.toString();
     return new Response(`
       <main>
-        <article>
-          <h3>Yeni Fikirler Yeni İşler Başvuruları</h3>
-          <a href="/tr/haber/yfyi-basvurulari">Devamını Oku</a>
-          <p>Teknoloji girişimleri için hızlandırma programı.</p>
+        <article class="news-container">
+          <h4>Yeni Fikirler Yeni İşler Başvuruları</h4>
+          <a class="read-more" href="/tr/haber/yfyi-basvurulari">Devamını Oku</a>
+          <p class="news-excerpt">Teknoloji girişimleri için hızlandırma programı.</p>
         </article>
       </main>
     `);
@@ -325,10 +338,193 @@ test("ODTÜ Teknokent scraper uses the current news category path", async () => 
 
     assert.equal(
       requestedUrl,
-      "https://www.odtuteknokent.com.tr/tr/haber-kategori/odtu-teknokent/",
+      "https://www.odtuteknokent.com.tr/tr/",
     );
     assert.equal(items.length, 1);
     assert.equal(items[0].title, "Yeni Fikirler Yeni İşler Başvuruları");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("NATO DIANA parser accepts only real connect detail links", () => {
+  const items = parseDianaListingPage(`
+    <main>
+      <article>
+        <a href="/connect/challenge-call-2026.html">
+          NATO DIANA Challenge Call Opens Jun 25, 2026
+        </a>
+      </article>
+      <a href="/about.html">About NATO DIANA</a>
+      <a href="/connect/page/2.html">Next</a>
+      <a href="https://www.linkedin.com/company/nato-diana">LinkedIn</a>
+    </main>
+  `);
+
+  assert.deepEqual(items, [
+    {
+      title: "NATO DIANA Challenge Call Opens",
+      url: "https://www.diana.nato.int/connect/challenge-call-2026.html",
+      dateText: "Jun 25, 2026",
+    },
+  ]);
+});
+
+test("NATO DIANA scraper returns real OpportunityInput fields without Selenium", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = input.toString();
+    if (url === "https://www.diana.nato.int/connect.html") {
+      return new Response(`
+        <main>
+          <article>
+            <a href="/connect/challenge-call-2026.html">
+              NATO DIANA Challenge Call Opens Jun 25, 2026
+            </a>
+          </article>
+        </main>
+      `);
+    }
+    if (url.includes("/connect/page/2.html")) {
+      return new Response("<main></main>");
+    }
+    return new Response(`
+      <html>
+        <head>
+          <meta name="description" content="Innovators can apply to the official NATO DIANA accelerator challenge.">
+          <meta property="og:image" content="/images/challenge.jpg">
+        </head>
+        <main>
+          <time datetime="2026-06-25">25 June 2026</time>
+        </main>
+      </html>
+    `);
+  };
+
+  try {
+    const items = await scrapeDiana();
+    assert.equal(items.length, 1);
+    assert.equal(items[0].source_name, "NATO DIANA");
+    assert.equal(
+      items[0].source_url,
+      "https://www.diana.nato.int/connect/challenge-call-2026.html",
+    );
+    assert.equal(
+      items[0].summary,
+      "Innovators can apply to the official NATO DIANA accelerator challenge.",
+    );
+    assert.equal(items[0].category, "Uluslararası Fonlar");
+    assert.equal(items[0].published_at, parseDate("2026-06-25"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ODTÜ parser removes carousel duplicates and preserves application cards", () => {
+  const items = parseOdtuListingPage(`
+    <main>
+      <article class="news-container">
+        <h4>Kilis GO Başvuruları Açıldı</h4>
+        <p class="news-excerpt">Teknoloji tabanlı girişimler için başvurular başladı.</p>
+        <a class="read-more" href="/tr/duyuru/kilis-go">Başvuru</a>
+      </article>
+      <article class="news-container cloned">
+        <h4>Kilis GO Başvuruları Açıldı</h4>
+        <a class="read-more" href="/tr/duyuru/kilis-go">Başvuru</a>
+      </article>
+    </main>
+  `);
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].category, "Etkinlik ve Programlar");
+  assert.equal(
+    items[0].source_url,
+    "https://www.odtuteknokent.com.tr/tr/duyuru/kilis-go",
+  );
+});
+
+test("ODTÜ date extraction follows explicit safe priority", () => {
+  assert.equal(
+    extractOdtuPublishedAt(`
+      <article>
+        <time datetime="2026-07-03">Eski görünen metin</time>
+        <span class="date">01.01.2020</span>
+        <script type="application/ld+json">{"datePublished":"2019-01-01"}</script>
+      </article>
+    `),
+    parseDate("2026-07-03"),
+  );
+});
+
+test("ODTÜ deadline extraction only uses a labelled application deadline", () => {
+  assert.equal(
+    extractOdtuDeadlineAt(`
+      <article>
+        Başvurular 29 Aralık 2025 tarihinde başladı.
+        <strong>Son Başvuru Tarihi: 25 Ocak 2026</strong>
+      </article>
+    `),
+    parseDate("25 Ocak 2026"),
+  );
+  assert.equal(
+    extractOdtuDeadlineAt(
+      "<article>Seçim duyurusu Ağustos 2029 tarihinde yapılacaktır.</article>",
+    ),
+    null,
+  );
+});
+
+test("NASA SBIR appendices use the official close date, not a later announcement", () => {
+  assert.equal(
+    resolveNasaSbirPublishedAt(
+      "2026-2027 BAA Appendix 26A-I SBIR",
+      "NASA",
+      "02/20/2029",
+    ),
+    parseDate("2026-04-21"),
+  );
+  assert.equal(
+    resolveGrantsGovDeadline(
+      "2026-2027 BAA Appendix 26A-I SBIR",
+      "NASA",
+      "09/30/2029",
+    ),
+    parseDate("2026-05-21"),
+  );
+  assert.equal(
+    resolveGrantsGovDeadline(
+      "2026-2027 NASA SBIR/STTR Broad Agency Announcement",
+      "NASA",
+      "09/30/2029",
+    ),
+    null,
+  );
+});
+
+test("EU Funding structured 2027 deadlines remain unchanged", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        results: [
+          {
+            url: "https://ec.europa.eu/funding/topic-2027",
+            metadata: {
+              title: ["Horizon Europe startup innovation call"],
+              objective: ["Support for innovative European startups."],
+              startDate: ["2026-07-01T00:00:00.000Z"],
+              deadlineDate: ["2027-09-15T00:00:00.000Z"],
+            },
+          },
+        ],
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+
+  try {
+    const items = await fetchEuFunding();
+    assert.equal(items.length, 1);
+    assert.equal(items[0].deadline_at, "2027-09-15T00:00:00.000Z");
   } finally {
     globalThis.fetch = originalFetch;
   }

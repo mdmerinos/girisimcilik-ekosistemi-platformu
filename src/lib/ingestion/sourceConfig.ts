@@ -264,14 +264,15 @@ export const sourceConfigs: SourceConfig[] = [
     id: "nato-diana",
     name: "NATO DIANA",
     kind: "html",
-    url: "https://www.diana.nato.int/challenges.html",
+    url: "https://www.diana.nato.int/connect.html",
     enabled: true,
     fragile: true,
     requiresApiKey: false,
     category: "Uluslararası Fonlar",
     opportunityType: "accelerator",
     country: "Global",
-    notes: "Sunucu otomatik isteklere 403 verebiliyor.",
+    notes:
+      "Resmî haber ve fırsat sayfaları; ilk dört sayfa kontrollü taranır, sunucu otomatik isteklere 403 verebilir.",
     collect: scrapeDiana,
   }),
   configuredSource({
@@ -306,7 +307,7 @@ export const sourceConfigs: SourceConfig[] = [
     id: "odtu-teknokent",
     name: "ODTÜ Teknokent",
     kind: "html",
-    url: "https://www.odtuteknokent.com.tr/tr/haber-kategori/odtu-teknokent/",
+    url: "https://www.odtuteknokent.com.tr/tr/",
     enabled: true,
     fragile: true,
     requiresApiKey: false,
@@ -314,7 +315,7 @@ export const sourceConfigs: SourceConfig[] = [
     opportunityType: "program",
     country: "Türkiye",
     notes:
-      "Güncel ODTÜ Teknokent haber akışı; bot koruması döndürebiliyor.",
+      "Ana sayfadaki gerçek haber, program ve başvuru kartları; bot koruması döndürebilir.",
     collect: scrapeOdtuTeknokent,
   }),
   configuredSource({

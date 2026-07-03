@@ -1,8 +1,11 @@
 import { z } from "zod";
 
 import { fetchWithRetry } from "@/lib/ingestion/fetchWithRetry";
+import {
+  resolveNasaSbirDeadlineAt,
+  resolveNasaSbirPublishedAt,
+} from "@/lib/opportunities/nasaSbirDates";
 import { createUniqueKey } from "@/lib/utils/createUniqueKey";
-import { parseDate } from "@/lib/utils/parseDate";
 import type { OpportunityInput } from "@/types/opportunity";
 
 const KEYWORDS = [
@@ -39,6 +42,13 @@ const grantsResponseSchema = z.object({
 });
 
 const ENDPOINT = "https://api.grants.gov/v1/api/search2";
+export function resolveGrantsGovDeadline(
+  title: string,
+  agency: string | undefined,
+  closeDate: string | undefined,
+): string | null {
+  return resolveNasaSbirDeadlineAt(title, agency, closeDate);
+}
 
 async function fetchKeyword(keyword: string) {
   const response = await fetchWithRetry(ENDPOINT, {
@@ -86,8 +96,16 @@ export async function fetchGrantsGov(): Promise<OpportunityInput[]> {
       source_name: "Grants.gov",
       source_url: originalUrl,
       application_url: originalUrl,
-      published_at: parseDate(item.openDate),
-      deadline_at: parseDate(item.closeDate),
+      published_at: resolveNasaSbirPublishedAt(
+        item.title,
+        agency,
+        item.openDate,
+      ),
+      deadline_at: resolveGrantsGovDeadline(
+        item.title,
+        agency,
+        item.closeDate,
+      ),
       fetched_at: fetchedAt,
       location: "ABD / Global",
       is_featured: false,

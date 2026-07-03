@@ -11,6 +11,17 @@ import {
 } from "@/lib/ingestion/investmentClassification";
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
+import {
+  isWorkerAuthorized,
+  processWorkerOpportunities,
+  workerEnvelopeSchema,
+} from "@/lib/ingestion/workerOpportunities";
+import {
+  getCountryGroup,
+  matchesCountryGroup,
+} from "@/lib/opportunities/countryGroup";
+import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
+import { calculateOpportunityStats } from "@/lib/opportunities/opportunityStats";
 import { decideRefreshIfStale } from "@/lib/ingestion/refreshDecision";
 import { sourceConfigs } from "@/lib/ingestion/sourceConfig";
 import {
@@ -256,4 +267,158 @@ test("refresh-if-stale response does not expose secrets", () => {
     "status",
   ]);
   assert.equal(JSON.stringify(result).includes("SECRET"), false);
+});
+
+test("country groups recognize Türkiye and global location variants", () => {
+  for (const location of ["Türkiye", "Turkey", "TR", "Türkiye / Global"]) {
+    assert.equal(getCountryGroup(location), "turkiye");
+    assert.equal(matchesCountryGroup(location, "turkiye"), true);
+  }
+  for (const location of ["Global", "Uluslararası", "Avrupa", "ABD", "EU", "USA"]) {
+    assert.equal(getCountryGroup(location), "global");
+    assert.equal(matchesCountryGroup(location, "global"), true);
+  }
+  assert.equal(matchesCountryGroup("Türkiye", "all"), true);
+  assert.equal(getCountryGroup("Online"), null);
+});
+
+test("public opportunity stats use stored dates and categories", () => {
+  const now = new Date("2026-07-03T12:00:00.000Z");
+  const base = {
+    id: "1",
+    unique_key: "test:1",
+    title: "Test",
+    summary: null,
+    source_name: "Test",
+    source_url: "https://example.com/detail",
+    application_url: null,
+    image_url: null,
+    published_at: "2026-07-02T09:00:00.000Z",
+    deadline_at: null,
+    fetched_at: "2026-07-03T09:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+    created_at: "2026-07-03T09:00:00.000Z",
+    updated_at: "2026-07-03T09:00:00.000Z",
+  };
+  const stats = calculateOpportunityStats(
+    [
+      { ...base, category: "Yatırım ve Sermaye Ağları" },
+      {
+        ...base,
+        id: "2",
+        unique_key: "test:2",
+        category: "Etkinlik ve Programlar",
+        deadline_at: "2026-07-10T09:00:00.000Z",
+      },
+      {
+        ...base,
+        id: "3",
+        unique_key: "test:3",
+        category: "Ulusal Destek ve Fonlar",
+      },
+      {
+        ...base,
+        id: "4",
+        unique_key: "test:4",
+        category: "Uluslararası Fonlar",
+      },
+    ],
+    now,
+    "2026-07-03T10:00:00.000Z",
+  );
+
+  assert.equal(stats.total, 4);
+  assert.equal(stats.addedToday, 4);
+  assert.equal(stats.investmentNewsLast7Days, 1);
+  assert.equal(stats.upcomingEvents, 1);
+  assert.equal(stats.nationalSupports, 1);
+  assert.equal(stats.internationalFunds, 1);
+});
+
+test("opportunity dates clearly distinguish deadline and publication", () => {
+  assert.deepEqual(
+    getOpportunityDateDisplay({
+      deadline_at: "2027-09-15T00:00:00.000Z",
+      published_at: "2026-07-03T00:00:00.000Z",
+    }),
+    {
+      label: "Son başvuru",
+      value: "2027-09-15T00:00:00.000Z",
+    },
+  );
+  assert.deepEqual(
+    getOpportunityDateDisplay({
+      deadline_at: null,
+      published_at: "2026-07-03T00:00:00.000Z",
+    }),
+    {
+      label: "Yayın",
+      value: "2026-07-03T00:00:00.000Z",
+    },
+  );
+  assert.equal(
+    getOpportunityDateDisplay({ deadline_at: null, published_at: null }),
+    null,
+  );
+});
+
+test("worker authorization rejects wrong secrets and accepts configured bearer", () => {
+  assert.equal(
+    isWorkerAuthorized("Bearer wrong", ["expected", undefined]),
+    false,
+  );
+  assert.equal(
+    isWorkerAuthorized("Bearer expected", ["expected", undefined]),
+    true,
+  );
+});
+
+test("worker payload requires a non-empty items array", () => {
+  assert.equal(workerEnvelopeSchema.safeParse({}).success, false);
+  assert.equal(workerEnvelopeSchema.safeParse({ items: [] }).success, false);
+});
+
+test("worker records are normalized, filtered and deduplicated before upsert", async () => {
+  const upserted: unknown[] = [];
+  const validItem = {
+    title: "NATO DIANA startup accelerator challenge call",
+    summary: "Innovators can apply to the public accelerator programme.",
+    category: "Uluslararası Fonlar",
+    source_name: "NATO DIANA",
+    source_url: "https://www.diana.nato.int/connect/challenge-call.html",
+    application_url:
+      "https://www.diana.nato.int/connect/challenge-call.html",
+    published_at: "2026-07-03T00:00:00.000Z",
+    location: "Global",
+  };
+  const result = await processWorkerOpportunities(
+    [
+      validItem,
+      validItem,
+      { title: "Eksik URL" },
+      {
+        ...validItem,
+        title: "Genel kurum duyurusu",
+        summary: null,
+        source_url: "https://www.diana.nato.int/connect/general-notice.html",
+        application_url:
+          "https://www.diana.nato.int/connect/general-notice.html",
+      },
+    ],
+    {
+      now: () => new Date("2026-07-03T12:00:00.000Z"),
+      upsert: async (items) => {
+        upserted.push(...items);
+        return { inserted: items.length, updated: 0 };
+      },
+    },
+  );
+
+  assert.equal(result.received, 4);
+  assert.equal(result.accepted, 1);
+  assert.equal(result.duplicates, 1);
+  assert.equal(result.rejected, 1);
+  assert.equal(result.skipped, 1);
+  assert.equal(upserted.length, 1);
 });

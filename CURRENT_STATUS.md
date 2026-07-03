@@ -1,167 +1,203 @@
-# Mevcut Proje Durumu
+# Girişim Atlası — Mevcut Proje Durumu
 
 ## Genel durum
 
-Girişimcilik Ekosistemi Platformu geliştirme ortamında çalışır durumdadır.
-Next.js arayüzü, Supabase veri katmanı, ingestion sistemi, admin paneli,
-zamanlanmış çalışma altyapısı ve site açılışında telafi amaçlı otomatik kontrol
-birlikte kullanılmaktadır.
+Girişim Atlası; Next.js App Router, Supabase, Vercel Cron, stale refresh,
+admin ingestion paneli ve kaynak bazlı ingestion sistemiyle çalışmaktadır.
 
-## Tamamlanan işler
+Mevcut `/api/opportunities`, `/api/refresh-if-stale`, `/api/cron/ingest` ve
+`/api/ingest` sözleşmeleri korunmuştur. Commit veya push yapılmamıştır.
 
-- `fragile`, `empty`, `skipped` ve gerçek sistem `error` durum yönetimi
-- Kaynakların birbirinden izole çalışması
-- RSS, HTML ve API kaynaklarında kontrollü timeout/retry
-- `image_url` desteği
-- Kaynak açıklamalarını temizleme
-- Sahte veya tahmini açıklama üretmeme kuralı
-- KOSGEB kartlarında gerçek detay linkini koruma
-- Homepage fallback ile gerçek detay linkini ayırma
-- Girişimcilik relevance filtresi
-- Manuel ve cron ingestion
-- Admin ingestion durum ve sayaç görünümü
-- Yatırım ve Sermaye Ağları kategorisi için sıkı yatırım filtresi
-- Günlük Vercel Cron sistemi
-- `/api/refresh-if-stale` yedek otomatik yenileme sistemi
-- Ana sayfa açılışında arka plan stale kontrolü
-- Admin panelde otomatik güncelleme bilgi alanı
+## Dashboard tasarımı
 
-## Yatırım filtresi sıkılaştırması
+Ana sayfa modern terminal/pano tasarımıyla çalışmaktadır:
 
-`src/lib/ingestion/investmentClassification.ts` artık `funding`, `fund`, `VC`,
-`venture capital` veya `capital` kelimelerini tek başına yatırım kategorisi için
-yeterli görmez.
+- Girişim Atlası marka başlığı
+- Yavaş ticker
+- Koyu/açık tema
+- Arama
+- Güvenli stale refresh düğmesi
+- Kategori sidebar/sekme görünümü
+- Türkiye / Dünya / Tümü filtresi
+- Public istatistik kartları
+- Responsive fırsat grid'i
+- Gerçek `image_url` varsa görsel, yoksa sade kart
 
-Yatırım kategorisine geçiş için başlık, özet veya kaynak metninde startup,
-şirket, founder, yatırım turu, seed/Series, investor, valuation, backed by,
-fintech/SaaS/biotech/deeptech veya Türkçe girişim/yatırım bağlamlarından biri
-aranır.
+Mobil taşmaya neden olan geniş ticker şeridi layout/paint containment içine
+alındı. Sayfa seviyesinde yatay taşma engellendi; kategori şeridi kendi içinde
+kontrollü yatay kaydırma kullanır. Kartların gereksiz minimum yüksekliği
+azaltıldı, footer durumu gerçek API kaynağına göre gösterilir. Statik fırsat,
+sahte Unsplash görseli, `/api/data`, `/api/refresh` veya public
+`/api/ingest` bağlantısı eklenmedi.
 
-Aşağıdaki gürültülü içerikler startup/VC ekosistemi bağlamı yoksa yatırım
-kategorisine alınmaz ve çoğu durumda relevance filtresinden de geçmez:
+Tarayıcı kontrolünde masaüstü görünüm, 24 gerçek kart, country filtreleri,
+istatistikler ve sıfır istemci console hatası doğrulandı.
 
-- government/public/research funding haberleri
-- HIV, science, ocean, climate funding cuts haberleri
-- political/far-right/ad-war funding haberleri
-- funding rate arbitrage ve crypto arbitrage içerikleri
-- memecoin venture capital içerikleri
-- spor takımı ownership by VC firm haberleri
-- borsa, hisse senedi, banka kampanyası, kredi kartı kampanyası, yatırım tavsiyesi
+## Kart tarih etiketleri
 
-`/api/opportunities?category=Yatırım%20ve%20Sermaye%20Ağları` endpoint'i, DB'de
-eskiden yanlış kategoriyle kalmış kayıtları da strict yatırım filtresinden
-geçirmeden response'a dahil etmez.
+Kartlar artık çıplak tarih göstermez:
 
-Yeni ingestion sırasında kategori yatırım görünse bile içerik strict filtreden
-geçmiyorsa kayıt `Haber ve Sosyal Medya Akışı` kategorisine düşürülür veya
-relevance dışıysa atlanır.
+- `deadline_at` varsa `Son başvuru: DD.MM.YYYY`
+- Deadline yok, `published_at` varsa `Yayın: DD.MM.YYYY`
+- İki alan da yoksa tarih gösterilmez
 
-## Günlük otomatik veri çekme
+Deadline ve yayın tarihi birbirine karıştırılmaz.
 
-`vercel.json` içinde günlük cron aktiftir:
+## NASA SBIR/STTR tarih düzeltmesi
 
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/ingest",
-      "schedule": "0 6 * * *"
-    }
-  ]
-}
-```
+NASA SBIR/STTR kayıtları Grants.gov akışından gelmektedir. Appendix 26A/26B
+kayıtları için güvenilir resmî takvim uygulandı:
 
-Vercel Cron UTC çalışır. `0 6 * * *` Türkiye saatiyle yaklaşık 09:00'da
-`/api/cron/ingest` endpoint'ini çağırır. Endpoint `CRON_SECRET` değerini yalnız
-server tarafında kontrol eder; secret client tarafına gönderilmez.
+- Açılış / yayın: 21 Nisan 2026
+- Son başvuru: 21 Mayıs 2026
 
-`runIngestion` başlamadan önce aktif `running` ingestion var mı diye kontrol
-eder. Böylece cron, manuel admin tetiklemesi ve stale refresh aynı anda ikinci
-ingestion başlatmaz.
+2026–2027 NASA SBIR/STTR kayıtlarında 2027 sonrasına taşan desteklenmeyen ham
+tarihler gösterilmez. Düzeltme hem yeni ingestion kayıtlarına hem API'den
+okunan mevcut NASA kayıtlarına uygulanır. Tarayıcıda NASA kartının
+`Son başvuru: 21.05.2026` gösterdiği doğrulandı.
 
-## `/api/refresh-if-stale` sistemi
+EU Funding/Horizon structured `deadlineDate` alanları değiştirilmedi. Testte
+15 Eylül 2027 tarihi korundu ve tarayıcı kartında
+`Son başvuru: 15.09.2027` olarak doğrulandı.
 
-Yeni endpoint:
+## ODTÜ Teknokent scraper
+
+Yeni kaynak eklenmedi; mevcut `odtu-teknokent` kaydı geliştirildi.
+
+Kullanılan selector ve öncelikler:
+
+- `.news-container-wrapper .news-container`
+- `.news-main-container .news-container`
+- `.news-item`
+- `.read-more`
+- `h4`, `h3`, `h2`
+- `.news-excerpt`, `.excerpt`, `p`
+- `time[datetime]`
+- `.haber-tarih`, `.news-date`, `.date`
+- JSON-LD `datePublished`
+- Etiketli `Son Başvuru Tarihi`
+
+Detay/başvuru linki görsel anchor'dan önce seçilir. Menü, footer ve sosyal
+bağlantılar kart container'ı dışında kalır. URL bazlı duplicate temizliği
+korunur. Rastgele body tarihi kullanılmaz.
+
+3 Temmuz 2026 canlı sonucu:
+
+- 12 kayıt
+- 12 başlık
+- 12 gerçek detay/başvuru linki
+- 12 gerçek özet
+- 1 güvenilir son başvuru tarihi
+- 0 uydurma tarih veya özet
+
+## NATO DIANA lightweight scraper
+
+Mevcut Vercel collector ilk dört `connect` sayfasını fetch + Cheerio ile
+kontrollü tarar. Bu ortamda resmî site HTTP 403 verdi; canlı lightweight
+sonucu 0 kayıttır ve kaynak `fragile` durumuna uygundur.
+
+Ana uygulamaya browser automation eklenmedi.
+
+## NATO DIANA harici Selenium worker
+
+Harici worker eklendi:
+
+- `workers/nato-diana/nato_diana_worker.py`
+- `workers/nato-diana/requirements.txt`
+- `workers/nato-diana/README.md`
+- `.github/workflows/nato-diana-worker.yml`
+
+Worker GitHub Actions üzerinde günlük veya manuel çalışabilir. Selenium,
+BeautifulSoup ve Requests yalnız worker requirements dosyasındadır; ana
+`package.json` ve Vercel build'i etkilenmez.
+
+Worker CAPTCHA, Cloudflare, login, proxy rotation, stealth veya fingerprint
+bypass uygulamaz. Erişim engellenirse hata vererek durur.
+
+## Harici worker endpoint'i
+
+Yeni güvenli endpoint:
 
 ```text
-/api/refresh-if-stale
+POST /api/worker/opportunities
 ```
 
-Davranış:
+Özellikler:
 
-- Son başarılı ingestion 12 saatten yeniyse `fresh`
-- Veri 12 saatten eskiyse ve cooldown yoksa `started`
-- Aktif `running` ingestion varsa `already_running`
-- Son deneme 30 dakikadan yeniyse `cooldown`
-- Hata olursa siteyi bozmadan `error`
+- `Authorization: Bearer ...` zorunlu
+- `BOT_INGESTION_SECRET` veya mevcut `INGESTION_SECRET` kabul edilir
+- Envelope ve her kayıt Zod ile ayrı doğrulanır
+- Hatalı tek kayıt tüm batch'i çökertmez
+- `normalizeOpportunity` uygulanır
+- `isEntrepreneurshipRelevant` uygulanır
+- `unique_key` sunucu tarafında oluşturulur
+- Batch içi duplicate kayıtlar tekilleştirilir
+- Supabase `unique_key` upsert kullanılır
+- Response yalnız public sayaçlar döndürür
+- Secret veya service-role key response'a girmez
 
-Response yalnız şu alanları döndürür:
+Yanlış secret ile canlı istek 401 döndürdü. Eksik payload, normalize/relevance,
+duplicate ve mocked upsert akışları unit testlerle doğrulandı.
 
-```json
-{
-  "ok": true,
-  "status": "fresh | started | already_running | cooldown | error",
-  "lastSuccessfulIngestionAt": "...",
-  "message": "..."
-}
+## GitHub Actions secrets
+
+Repository secrets:
+
+```text
+WORKER_INGESTION_URL
+WORKER_INGESTION_SECRET
 ```
 
-`INGESTION_SECRET` veya `CRON_SECRET` client tarafına sızdırılmaz.
+Vercel tarafında isteğe bağlı:
 
-## Ana sayfa otomatik kontrol davranışı
+```text
+BOT_INGESTION_SECRET
+```
 
-`src/components/OpportunityGrid.tsx` ana sayfa açıldığında mevcut fırsatları
-normal şekilde yüklemeye devam eder. Buna paralel olarak `/api/refresh-if-stale`
-arka planda çağrılır.
+Worker secret değeri mevcut `INGESTION_SECRET` ile aynı da olabilir; dosyalara
+gerçek değer yazılmamıştır.
 
-Kullanıcı bekletilmez. Küçük bir bilgi rozeti şu mesajlardan birini gösterir:
+## API smoke testleri
 
-- `Veriler güncel.`
-- `Veriler arka planda güncelleniyor.`
-- `Veriler şu anda güncelleniyor.`
-- `Veriler kısa süre önce kontrol edildi.`
-- `Veriler gösteriliyor, güncelleme daha sonra tekrar denenecek.`
+Yerel çalışan uygulamada:
 
-## Admin panel otomatik güncelleme bilgisi
+- `/api/opportunities` → 200
+- `/api/opportunities?countryGroup=turkiye` → 200
+- `/api/opportunities?countryGroup=global` → 200
+- `/api/opportunities?category=Uluslararası%20Fonlar` → 200
+- `/api/stats` → 200
+- `/api/refresh-if-stale` POST → 200
+- `/api/worker/opportunities` yanlış secret → 401
 
-Admin ingestion panelinde mevcut tasarım korunarak küçük bir otomatik güncelleme
-alanı eklendi. Gösterilen bilgiler:
+Admin, cron ve refresh-if-stale kaynak kodları değiştirilmedi.
 
-- Otomatik cron aktifliği
-- Cron schedule: `0 6 * * *`
-- Türkiye saatiyle yaklaşık 09:00 bilgisi
-- Son başarılı ingestion zamanı
-- Son deneme zamanı
-- Running ingestion var mı
-- Son run durumu
-- Son run için kaynak durum sayıları
+## Bağımlılık ve migration
 
-## Son temiz kontrol
+- Ana npm projesine yeni paket kurulmadı.
+- Ana `package.json` değiştirilmedi.
+- Yeni Supabase migration oluşturulmadı.
+- Selenium yalnız `workers/nato-diana/requirements.txt` içindedir.
+- `.env.local` okunmadı veya değiştirilmedi.
+- `.env.example` yalnız güvenli `BOT_INGESTION_SECRET` placeholder'ı ile
+  güncellendi.
+
+## Son kontroller
 
 - `npm.cmd run typecheck` başarılı
 - `npm.cmd run lint` başarılı
-- `npm.cmd test` başarılı — 33/33
+- `npm.cmd test` başarılı — 46/46
 - `npm.cmd run build` başarılı
-
-PowerShell `npm.ps1` execution policy sorunu nedeniyle kontroller `npm.cmd` ile
-çalıştırıldı. Paket yöneticisi değiştirilmedi, pnpm kullanılmadı, paket kurulmadı.
-
-## Supabase migration listesi
-
-1. `supabase/migrations/001_create_opportunities.sql`
-2. `supabase/migrations/002_ingestion_observability.sql`
-3. `supabase/migrations/003_expand_ingestion_statuses.sql`
-4. `supabase/migrations/004_add_opportunity_media_fields.sql`
-
-Bu aşamada yeni migration oluşturulmadı.
-
-## Sonraki yapılacak işler
-
-- Production deploy sonrası Vercel ortam değişkenlerini doğrulama
-- Gerçek cron çalışmasını Vercel dashboard üzerinden izleme
-- Yeni kaynak kalitesi ve mobil tasarım iyileştirmeleri
+- Build içinde `/api/worker/opportunities` rotası doğrulandı
 
 ## KALAN İŞ
 
-Bu geliştirme kapsamında kalan zorunlu iş yoktur. Production ortamında yalnızca
-Vercel `CRON_SECRET`, Supabase server env değerleri ve cron logları doğrulanmalıdır.
+- GitHub repository secrets değerleri tanımlanmalı.
+- Vercel'de `BOT_INGESTION_SECRET` tanımlanmalı veya worker ile mevcut
+  `INGESTION_SECRET` paylaşılmalı.
+- GitHub Actions workflow'u ilk kez manuel çalıştırılıp NATO'nun GitHub-hosted
+  runner üzerinden normal Chrome erişimine izin verip vermediği doğrulanmalı.
+- Python bu Codex makinesinde PATH'te olmadığı için harici worker burada
+  çalıştırılmadı; GitHub Actions ortamında requirements kurulumu ile
+  doğrulanmalıdır.
+- Production deploy sonrasında ODTÜ ingestion sayıları ve NASA mevcut
+  kayıtlarının güncellenmesi admin panelden izlenmelidir.
