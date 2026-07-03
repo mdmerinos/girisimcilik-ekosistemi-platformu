@@ -1,8 +1,10 @@
 "use client";
 
+import dayjs from "dayjs";
 import { FormEvent, useState } from "react";
 
 import {
+  SOURCE_STATUSES,
   SOURCE_STATUS_PRESENTATION,
   type SourceStatus,
 } from "@/lib/ingestion/sourceStatus";
@@ -67,6 +69,14 @@ type AdminStats = {
   enabledSourceCount: number;
   fragileSourceCount: number;
   lastOpportunityUpdate: string | null;
+  lastSuccessfulIngestionAt: string | null;
+  lastAttemptAt: string | null;
+  latestRunStatus: string | null;
+  runningIngestion: boolean;
+  cronEnabled: boolean;
+  cronSchedule: string;
+  cronScheduleDescription: string;
+  sourceStatusCounts: Record<SourceStatus, number>;
 };
 
 type SourceCatalogItem = {
@@ -77,6 +87,10 @@ type SourceCatalogItem = {
   configured: boolean;
   notes: string;
 };
+
+function formatDate(value: string | null): string {
+  return value ? dayjs(value).format("DD.MM.YYYY HH:mm") : "Henüz yok";
+}
 
 export function IngestionControl() {
   const [secret, setSecret] = useState("");
@@ -202,6 +216,54 @@ export function IngestionControl() {
           </p>
         )}
       </form>
+
+      {adminStats && (
+        <div className="mt-8 rounded-2xl border border-[#dfe8d8] bg-[#fbfdf8] p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#73944c]">
+                Otomatik güncelleme
+              </p>
+              <p className="mt-1 text-sm text-[#5e6d63]">
+                Vercel Cron: {adminStats.cronEnabled ? "aktif" : "pasif"} ·{" "}
+                {adminStats.cronScheduleDescription}
+              </p>
+            </div>
+            <span className="rounded-full border border-[#dbe8d2] bg-white px-3 py-1 text-xs font-semibold text-[#607d40]">
+              {adminStats.cronSchedule}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            {[
+              ["Son başarılı", formatDate(adminStats.lastSuccessfulIngestionAt)],
+              ["Son deneme", formatDate(adminStats.lastAttemptAt)],
+              ["Running", adminStats.runningIngestion ? "Evet" : "Hayır"],
+              ["Son durum", adminStats.latestRunStatus ?? "Henüz yok"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-white p-3">
+                <p className="text-xs text-[#748078]">{label}</p>
+                <p className="mt-1 text-sm font-semibold text-[#142219]">
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {SOURCE_STATUSES.filter(
+              (itemStatus) => adminStats.sourceStatusCounts[itemStatus] > 0,
+            ).map((itemStatus) => (
+              <span
+                key={itemStatus}
+                className={`rounded-full px-2.5 py-1 text-xs ${
+                  SOURCE_STATUS_PRESENTATION[itemStatus].className
+                }`}
+              >
+                {itemStatus}: {adminStats.sourceStatusCounts[itemStatus]}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {adminStats && (
         <div className="mt-8 grid gap-3 sm:grid-cols-3">

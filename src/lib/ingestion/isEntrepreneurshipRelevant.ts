@@ -1,3 +1,7 @@
+import {
+  hasStrictInvestmentSignal,
+  INVESTMENT_CATEGORY,
+} from "@/lib/ingestion/investmentClassification";
 import { normalizeText } from "@/lib/utils/normalizeText";
 
 export type RelevanceInput = {
@@ -6,6 +10,7 @@ export type RelevanceInput = {
   summary?: string | null;
   category?: string | null;
   sourceName?: string | null;
+  sourceId?: string | null;
   type?: string | null;
 };
 
@@ -31,14 +36,6 @@ const STRONG_KEYWORDS = [
   "innovation",
   "dijital dönüşüm",
   "dijital donusum",
-  "yatırım",
-  "yatirim",
-  "investment",
-  "venture capital",
-  "angel investment",
-  "melek yatırım",
-  "melek yatirim",
-  "funding",
   "accelerator",
   "incubation",
   "incubator",
@@ -90,6 +87,23 @@ const EXCLUSION_PATTERNS = [
   /\bmagazin\b/i,
 ] as const;
 
+const GENERAL_FINANCE_PATTERNS = [
+  /\bborsa\b/i,
+  /\bhisse senedi\b/i,
+  /\bkripto(?: para)?\b/i,
+  /\bmakro ekonomi\b/i,
+  /\bbanka\b/i,
+  /\bkredi kartı kampanyası\b/i,
+  /\bkredi karti kampanyasi\b/i,
+  /\byatırım tavsiyesi\b/i,
+  /\byatirim tavsiyesi\b/i,
+  /\bfunding rate arbitrage\b/i,
+  /\bresearch grant funding\b/i,
+  /\bpublic funding\b/i,
+  /\bhiv funding\b/i,
+  /\bmemecoin\b/i,
+] as const;
+
 function searchable(value: string): string {
   return normalizeText(value)
     .toLocaleLowerCase("tr-TR")
@@ -108,17 +122,35 @@ export function isEntrepreneurshipRelevant(
     [input.title, input.description, input.summary].filter(Boolean).join(" "),
   );
   const context = searchable(
-    [input.category, input.sourceName, input.type].filter(Boolean).join(" "),
+    [input.category, input.sourceName, input.sourceId, input.type]
+      .filter(Boolean)
+      .join(" "),
   );
-  const strongKeyword =
-    findKeyword(content, STRONG_KEYWORDS) ??
-    (/\bvc\b/i.test(content) ? "vc" : undefined);
+  const investmentSignal = hasStrictInvestmentSignal(input);
+  const strongKeyword = findKeyword(content, STRONG_KEYWORDS);
   const excluded = EXCLUSION_PATTERNS.find((pattern) => pattern.test(content));
+  const generalFinance = GENERAL_FINANCE_PATTERNS.find((pattern) =>
+    pattern.test(content),
+  );
 
-  if (excluded && !strongKeyword) {
+  if (excluded && !strongKeyword && !investmentSignal) {
     return {
       relevant: false,
       reason: "Girişimcilik kapsamı dışında olduğu için atlandı.",
+    };
+  }
+
+  if (generalFinance && !strongKeyword && !investmentSignal) {
+    return {
+      relevant: false,
+      reason: "Girişimcilik kapsamı dışında olduğu için atlandı.",
+    };
+  }
+
+  if (investmentSignal) {
+    return {
+      relevant: true,
+      reason: `Yatırım sinyali eşleşti: ${INVESTMENT_CATEGORY}`,
     };
   }
 
@@ -138,7 +170,7 @@ export function isEntrepreneurshipRelevant(
   ]);
   const hasOpportunityContext =
     opportunityTypes.has(input.type ?? "") ||
-    /(destek|fon|yatırım|yatirim|kosgeb|tubitak|grants|funding)/i.test(context);
+    /(destek|fon|yatırım|yatirim|kosgeb|tubitak|grants)/i.test(context);
 
   if (opportunityKeyword && hasOpportunityContext) {
     return {

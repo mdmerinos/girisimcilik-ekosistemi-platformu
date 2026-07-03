@@ -1,13 +1,15 @@
 import {
   createIngestionRun,
   finishIngestionRun,
+  getRunningIngestionRun,
   type IngestionStatus,
   type IngestionTrigger,
   type SourceIngestionResult,
   writeSourceLog,
 } from "@/lib/ingestion/ingestionRuns";
-import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
+import { applyInvestmentCategoryPriority } from "@/lib/ingestion/investmentClassification";
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
+import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import { normalizeOpportunity } from "@/lib/ingestion/normalizeOpportunity";
 import {
   sourceConfigs,
@@ -30,6 +32,13 @@ const defaultDependencies: IngestSourceDependencies = {
   upsert: upsertOpportunities,
   writeLog: writeSourceLog,
 };
+
+export class IngestionAlreadyRunningError extends Error {
+  constructor(public readonly runId: string) {
+    super("Ingestion is already running.");
+    this.name = "IngestionAlreadyRunningError";
+  }
+}
 
 export type IngestionResult = {
   runId: string;
@@ -80,12 +89,16 @@ export async function ingestSource(
 
       for (const item of collected) {
         try {
-          const normalizedItem = normalizeOpportunity(item);
+          const normalizedItem = applyInvestmentCategoryPriority(
+            normalizeOpportunity(item),
+            { sourceId: source.id, type: source.opportunityType },
+          );
           const relevance = isEntrepreneurshipRelevant({
             title: normalizedItem.title,
             summary: normalizedItem.summary,
             category: normalizedItem.category,
             sourceName: normalizedItem.source_name,
+            sourceId: source.id,
             type: source.opportunityType,
           });
 
@@ -155,6 +168,11 @@ export async function ingestSource(
 export async function runIngestion(
   trigger: IngestionTrigger,
 ): Promise<IngestionResult> {
+  const activeRun = await getRunningIngestionRun();
+  if (activeRun) {
+    throw new IngestionAlreadyRunningError(activeRun.id);
+  }
+
   const runId = await createIngestionRun(trigger);
   const enabledSources = sourceConfigs.filter((source) => source.enabled);
   const sourceResults = await mapWithConcurrency(

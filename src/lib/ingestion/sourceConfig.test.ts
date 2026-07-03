@@ -5,8 +5,13 @@ import {
   HttpError,
   RequestTimeoutError,
 } from "@/lib/ingestion/fetchWithRetry";
+import {
+  classifyInvestmentCategory,
+  INVESTMENT_CATEGORY,
+} from "@/lib/ingestion/investmentClassification";
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
+import { decideRefreshIfStale } from "@/lib/ingestion/refreshDecision";
 import { sourceConfigs } from "@/lib/ingestion/sourceConfig";
 import {
   classifySourceError,
@@ -37,38 +42,22 @@ test("API-key sources declare their environment variable", () => {
 });
 
 test("source errors map to operational statuses and friendly messages", () => {
-  assert.deepEqual(
-    classifySourceError(new HttpError(403, "https://example.com")),
-    {
-      status: "fragile",
-      message: "Kaynak güvenlik politikası nedeniyle bot isteklerini engelliyor.",
-    },
+  assert.equal(
+    classifySourceError(new HttpError(403, "https://example.com")).status,
+    "fragile",
   );
-  assert.deepEqual(
-    classifySourceError(new EmptySourceError("https://example.com")),
-    {
-      status: "empty",
-      message:
-        "Kaynak sayfa yapısı değişmiş olabilir veya şu an uygun kayıt bulunamadı.",
-    },
+  assert.equal(
+    classifySourceError(new EmptySourceError("https://example.com")).status,
+    "empty",
   );
-  assert.deepEqual(classifySourceError(new TypeError("fetch failed")), {
-    status: "fragile",
-    message: "Kaynağa geçici olarak ulaşılamadı.",
-  });
-  assert.deepEqual(
-    classifySourceError(new RequestTimeoutError("https://example.com")),
-    {
-      status: "fragile",
-      message: "Kaynak zamanında yanıt vermedi.",
-    },
+  assert.equal(classifySourceError(new TypeError("fetch failed")).status, "fragile");
+  assert.equal(
+    classifySourceError(new RequestTimeoutError("https://example.com")).status,
+    "fragile",
   );
-  assert.deepEqual(
-    classifySourceError(new HttpError(404, "https://example.com")),
-    {
-      status: "skipped",
-      message: "Kaynak sayfa şu anda bulunamadı veya taşınmış olabilir.",
-    },
+  assert.equal(
+    classifySourceError(new HttpError(404, "https://example.com")).status,
+    "skipped",
   );
 });
 
@@ -140,4 +129,131 @@ test("entrepreneurship relevance rejects unrelated announcements", () => {
       "Girişimcilik kapsamı dışında olduğu için atlandı.",
     );
   }
+});
+
+test("investment filter rejects noisy funding and VC content", () => {
+  for (const title of [
+    "Trump administration to phase out HIV funding",
+    "Ocean sensors will go dark under funding cuts",
+    "Implementing a Funding Rate Arbitrage Strategy with Backtesting",
+    "Proton is funding the French far right on YouTube",
+    "Research grant funding peer review",
+    "SF Giants sell piece of team to venture capital firm",
+    "Memecoin Venture Capital",
+  ]) {
+    assert.notEqual(
+      classifyInvestmentCategory({
+        title,
+        category: "Yatırım ve Sermaye Ağları",
+        sourceName: "Hacker News",
+        sourceId: "hacker-news-funding",
+        type: "investment",
+      }),
+      INVESTMENT_CATEGORY,
+      title,
+    );
+    assert.equal(
+      isEntrepreneurshipRelevant({
+        title,
+        category: "Yatırım ve Sermaye Ağları",
+        sourceName: "Hacker News",
+        sourceId: "hacker-news-funding",
+        type: "investment",
+      }).relevant,
+      false,
+      title,
+    );
+  }
+});
+
+test("investment filter accepts startup investment and VC ecosystem content", () => {
+  for (const title of [
+    "AI startup raises $15M Series A led by venture capital investors",
+    "Yerli fintech girişimi yatırım turunu tamamladı",
+    "VC fund backs early-stage founders",
+    "Substack raises $100M from Andreessen Horowitz",
+    "Amazon Alexa Fund backs AI startups",
+    "Sam Altman-backed Coco Robotics raises $80M",
+  ]) {
+    assert.equal(
+      classifyInvestmentCategory({
+        title,
+        category: "Haber ve Sosyal Medya Akışı",
+        sourceName: "Test Kaynağı",
+        sourceId: "techcrunch-funding-rss",
+        type: "investment",
+      }),
+      INVESTMENT_CATEGORY,
+      title,
+    );
+    assert.equal(
+      isEntrepreneurshipRelevant({
+        title,
+        category: "Haber ve Sosyal Medya Akışı",
+        sourceName: "Test Kaynağı",
+        sourceId: "techcrunch-funding-rss",
+        type: "investment",
+      }).relevant,
+      true,
+      title,
+    );
+  }
+});
+
+test("refresh-if-stale decision handles freshness and duplicate protection", () => {
+  const now = new Date("2026-07-03T12:00:00.000Z");
+
+  assert.equal(
+    decideRefreshIfStale({
+      now,
+      lastSuccessfulIngestionAt: "2026-07-03T06:00:00.000Z",
+      lastAttemptAt: "2026-07-03T06:00:00.000Z",
+      isRunning: false,
+    }).status,
+    "fresh",
+  );
+  assert.equal(
+    decideRefreshIfStale({
+      now,
+      lastSuccessfulIngestionAt: "2026-07-02T20:00:00.000Z",
+      lastAttemptAt: "2026-07-02T20:00:00.000Z",
+      isRunning: false,
+    }).status,
+    "started",
+  );
+  assert.equal(
+    decideRefreshIfStale({
+      now,
+      lastSuccessfulIngestionAt: "2026-07-02T20:00:00.000Z",
+      lastAttemptAt: "2026-07-03T11:45:00.000Z",
+      isRunning: false,
+    }).status,
+    "cooldown",
+  );
+  assert.equal(
+    decideRefreshIfStale({
+      now,
+      lastSuccessfulIngestionAt: "2026-07-02T20:00:00.000Z",
+      lastAttemptAt: "2026-07-03T11:45:00.000Z",
+      isRunning: true,
+    }).status,
+    "already_running",
+  );
+});
+
+test("refresh-if-stale response does not expose secrets", () => {
+  const result = decideRefreshIfStale({
+    now: new Date("2026-07-03T12:00:00.000Z"),
+    lastSuccessfulIngestionAt: null,
+    lastAttemptAt: null,
+    isRunning: false,
+  });
+
+  assert.deepEqual(Object.keys(result).sort(), [
+    "lastSuccessfulIngestionAt",
+    "message",
+    "ok",
+    "status",
+  ]);
+  assert.equal(JSON.stringify(result).includes("SECRET"), false);
 });

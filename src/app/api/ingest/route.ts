@@ -4,7 +4,10 @@ import {
   getIngestionAdminStats,
   getRecentIngestionRuns,
 } from "@/lib/ingestion/ingestionRuns";
-import { runIngestion } from "@/lib/ingestion/runIngestion";
+import {
+  IngestionAlreadyRunningError,
+  runIngestion,
+} from "@/lib/ingestion/runIngestion";
 import { publicSourceCatalog } from "@/lib/ingestion/sourceConfig";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 
@@ -66,6 +69,13 @@ export async function POST(request: NextRequest) {
     const result = await runIngestion("manual");
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    if (error instanceof IngestionAlreadyRunningError) {
+      return NextResponse.json(
+        { error: "Veri toplama işlemi zaten çalışıyor.", runId: error.runId },
+        { status: 409 },
+      );
+    }
+
     console.error("Manual ingestion failed:", error);
     return NextResponse.json(
       { error: "Veri toplama işlemi tamamlanamadı." },

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { runIngestion } from "@/lib/ingestion/runIngestion";
+import {
+  IngestionAlreadyRunningError,
+  runIngestion,
+} from "@/lib/ingestion/runIngestion";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 
 export const maxDuration = 300;
@@ -24,6 +27,13 @@ export async function GET(request: NextRequest) {
     const result = await runIngestion("cron");
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    if (error instanceof IngestionAlreadyRunningError) {
+      return NextResponse.json(
+        { ok: true, status: "already_running", runId: error.runId },
+        { status: 409 },
+      );
+    }
+
     console.error("Scheduled ingestion failed:", error);
     return NextResponse.json(
       { error: "Zamanlanmış veri toplama işlemi tamamlanamadı." },

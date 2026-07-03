@@ -1,9 +1,10 @@
 import { z } from "zod";
 
-import { OPPORTUNITY_CATEGORIES, type OpportunityInput } from "@/types/opportunity";
-import { normalizeText } from "@/lib/utils/normalizeText";
+import { applyInvestmentCategoryPriority } from "@/lib/ingestion/investmentClassification";
 import { cleanOpportunitySummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import { resolveOpportunityUrl } from "@/lib/utils/opportunityUrl";
+import { normalizeText } from "@/lib/utils/normalizeText";
+import { OPPORTUNITY_CATEGORIES, type OpportunityInput } from "@/types/opportunity";
 
 const opportunitySchema = z.object({
   unique_key: z.string().min(8),
@@ -36,7 +37,7 @@ export function normalizeOpportunity(input: OpportunityInput): OpportunityInput 
     throw new Error("Opportunity source URL is not a valid HTTP(S) URL.");
   }
 
-  return opportunitySchema.parse({
+  const normalized = opportunitySchema.parse({
     ...input,
     title,
     summary: cleanOpportunitySummary(input.summary, title),
@@ -46,4 +47,6 @@ export function normalizeOpportunity(input: OpportunityInput): OpportunityInput 
     image_url: normalizeImageUrl(input.image_url),
     location: input.location ? normalizeText(input.location) : null,
   });
+
+  return applyInvestmentCategoryPriority(normalized);
 }

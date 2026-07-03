@@ -8,6 +8,20 @@ import { OpportunityCard } from "@/components/OpportunityCard";
 import { SearchBar } from "@/components/SearchBar";
 import type { Opportunity } from "@/types/opportunity";
 
+type RefreshStatus =
+  | "fresh"
+  | "started"
+  | "already_running"
+  | "cooldown"
+  | "error";
+
+type RefreshResponse = {
+  ok: boolean;
+  status: RefreshStatus;
+  lastSuccessfulIngestionAt: string | null;
+  message: string;
+};
+
 type ApiResponse = {
   data: Opportunity[];
   meta: {
@@ -30,6 +44,23 @@ export function OpportunityGrid() {
   const [meta, setMeta] = useState<ApiResponse["meta"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState<RefreshResponse | null>(
+    null,
+  );
+
+  useEffect(() => {
+    fetch("/api/refresh-if-stale", { method: "POST", cache: "no-store" })
+      .then((response) => response.json() as Promise<RefreshResponse>)
+      .then(setRefreshStatus)
+      .catch(() => {
+        setRefreshStatus({
+          ok: false,
+          status: "error",
+          lastSuccessfulIngestionAt: null,
+          message: "Veriler gösteriliyor, güncelleme daha sonra tekrar denenecek.",
+        });
+      });
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -119,6 +150,17 @@ export function OpportunityGrid() {
                   <p>
                     Son güncelleme:{" "}
                     {dayjs(meta.lastUpdated).format("DD.MM.YYYY HH:mm")}
+                  </p>
+                )}
+                {refreshStatus && (
+                  <p
+                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                      refreshStatus.status === "error"
+                        ? "border-[#e8c7c7] bg-[#fff4f4] text-[#9b464d]"
+                        : "border-[#dfe8d8] bg-white text-[#607d40]"
+                    }`}
+                  >
+                    {refreshStatus.message}
                   </p>
                 )}
               </div>

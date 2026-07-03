@@ -3,7 +3,7 @@ import {
   sourceConfigs,
   type SourceKind,
 } from "@/lib/ingestion/sourceConfig";
-import type { SourceStatus } from "@/lib/ingestion/sourceStatus";
+import { SOURCE_STATUSES, type SourceStatus } from "@/lib/ingestion/sourceStatus";
 
 export type IngestionTrigger = "manual" | "cron";
 export type IngestionStatus = "running" | "success" | "partial" | "failed";
@@ -21,6 +21,19 @@ export type SourceIngestionResult = {
   skipped: number;
   durationMs: number;
   error: string | null;
+};
+
+export type IngestionRunRow = {
+  id: string;
+  trigger: IngestionTrigger;
+  status: IngestionStatus;
+  started_at: string;
+  finished_at: string | null;
+  collected_count: number;
+  inserted_count: number;
+  updated_count: number;
+  skipped_count: number;
+  error_count: number;
 };
 
 export async function createIngestionRun(
@@ -113,11 +126,79 @@ export async function getRecentIngestionRuns(limit = 10) {
   }));
 }
 
+export async function getRunningIngestionRun(maxAgeMs = 2 * 60 * 60 * 1000) {
+  const startedAfter = new Date(Date.now() - maxAgeMs).toISOString();
+  const { data, error } = await createAdminSupabaseClient()
+    .from("ingestion_runs")
+    .select("*")
+    .eq("status", "running")
+    .gte("started_at", startedAfter)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as IngestionRunRow | null;
+}
+
+export async function getLatestSuccessfulIngestionRun() {
+  const { data, error } = await createAdminSupabaseClient()
+    .from("ingestion_runs")
+    .select("*")
+    .in("status", ["success", "partial"])
+    .order("finished_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as IngestionRunRow | null;
+}
+
+export async function getLatestIngestionRun() {
+  const { data, error } = await createAdminSupabaseClient()
+    .from("ingestion_runs")
+    .select("*")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as IngestionRunRow | null;
+}
+
+export async function getLatestSourceStatusCounts(runId: string | null) {
+  if (!runId) {
+    return Object.fromEntries(
+      SOURCE_STATUSES.map((status) => [status, 0]),
+    ) as Record<SourceStatus, number>;
+  }
+
+  const { data, error } = await createAdminSupabaseClient()
+    .from("ingestion_logs")
+    .select("status")
+    .eq("run_id", runId);
+
+  if (error) throw error;
+
+  return (data ?? []).reduce(
+    (sum, log) => ({
+      ...sum,
+      [log.status as SourceStatus]: sum[log.status as SourceStatus] + 1,
+    }),
+    Object.fromEntries(
+      SOURCE_STATUSES.map((status) => [status, 0]),
+    ) as Record<SourceStatus, number>,
+  );
+}
+
 export async function getIngestionAdminStats() {
   const supabase = createAdminSupabaseClient();
   const [
     { count: opportunityCount, error: countError },
     { data: latestRows, error: latestError },
+    latestSuccessfulRun,
+    latestRun,
+    runningRun,
   ] = await Promise.all([
     supabase
       .from("opportunities")
@@ -127,10 +208,17 @@ export async function getIngestionAdminStats() {
       .select("fetched_at")
       .order("fetched_at", { ascending: false })
       .limit(1),
+    getLatestSuccessfulIngestionRun(),
+    getLatestIngestionRun(),
+    getRunningIngestionRun(),
   ]);
 
   if (countError) throw countError;
   if (latestError) throw latestError;
+
+  const sourceStatusCounts = await getLatestSourceStatusCounts(
+    latestRun?.id ?? null,
+  );
 
   return {
     opportunityCount: opportunityCount ?? 0,
@@ -138,5 +226,13 @@ export async function getIngestionAdminStats() {
     enabledSourceCount: sourceConfigs.filter((source) => source.enabled).length,
     fragileSourceCount: sourceConfigs.filter((source) => source.fragile).length,
     lastOpportunityUpdate: latestRows?.[0]?.fetched_at ?? null,
+    lastSuccessfulIngestionAt: latestSuccessfulRun?.finished_at ?? null,
+    lastAttemptAt: latestRun?.started_at ?? null,
+    latestRunStatus: latestRun?.status ?? null,
+    runningIngestion: Boolean(runningRun),
+    cronEnabled: true,
+    cronSchedule: "0 6 * * *",
+    cronScheduleDescription: "Her gün yaklaşık Türkiye saatiyle 09:00",
+    sourceStatusCounts,
   };
 }

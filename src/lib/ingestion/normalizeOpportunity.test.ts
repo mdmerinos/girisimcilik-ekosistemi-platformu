@@ -120,3 +120,43 @@ test("image_url is normalized and invalid media URLs become null", () => {
     null,
   );
 });
+
+test("investment signals upgrade news items to the investment category", () => {
+  const baseOpportunity = {
+    unique_key: "investment-category-test",
+    summary: null,
+    category: "Haber ve Sosyal Medya Akışı" as const,
+    source_name: "Webrazzi",
+    source_url: "https://example.com/news",
+    application_url: null,
+    published_at: null,
+    deadline_at: null,
+    fetched_at: "2026-07-03T08:00:00.000Z",
+    location: null,
+    is_featured: false,
+  };
+
+  assert.equal(
+    normalizeOpportunity({
+      ...baseOpportunity,
+      title: "Türk girişimi 2 milyon dolar tohum yatırım aldı",
+    }).category,
+    "Yatırım ve Sermaye Ağları",
+  );
+  assert.equal(
+    normalizeOpportunity({
+      ...baseOpportunity,
+      unique_key: "investment-category-test-2",
+      title: "Startup raises $15M Series A led by venture capital investors",
+    }).category,
+    "Yatırım ve Sermaye Ağları",
+  );
+  assert.equal(
+    normalizeOpportunity({
+      ...baseOpportunity,
+      unique_key: "investment-category-test-3",
+      title: "Webrazzi: yerli fintech girişimi yatırım turunu tamamladı",
+    }).category,
+    "Yatırım ve Sermaye Ağları",
+  );
+});
