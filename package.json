@@ -1,0 +1,35 @@
+{
+  "name": "girisimcilik-ekosistemi-platformu",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/lib/utils/createUniqueKey.test.ts src/lib/ingestion/normalizeOpportunity.test.ts src/lib/ingestion/sourceConfig.test.ts src/lib/scrapers/scrapers.test.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "latest",
+    "cheerio": "latest",
+    "dayjs": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "rss-parser": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "tailwindcss": "latest",
+    "tsx": "^4.22.4",
+    "typescript": "latest"
+  }
+}
