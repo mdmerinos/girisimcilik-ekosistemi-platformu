@@ -11,12 +11,16 @@ import {
   type RefreshState,
 } from "@/components/home/RefreshStatus";
 import { SourceFilter } from "@/components/home/SourceFilter";
-import { StatsCards } from "@/components/home/StatsCards";
+import {
+  StatsCards,
+  type StatsCardFilter,
+} from "@/components/home/StatsCards";
 import { TickerBar } from "@/components/home/TickerBar";
 import { TimeRangeTabs } from "@/components/home/TimeRangeTabs";
 import { TodayFilterTabs } from "@/components/home/TodayFilterTabs";
 import type { CountryGroup } from "@/lib/opportunities/countryGroup";
 import type {
+  StatFilter,
   TimeRange,
   TodayFilter,
 } from "@/lib/opportunities/opportunityFilters";
@@ -41,6 +45,7 @@ type ApiResponse = {
     hasMore: boolean;
     timeRange: TimeRange;
     today: TodayFilter;
+    statFilter: StatFilter;
     sourceFilter: OpportunitySource;
     sourceWorkerStatus: {
       status: string;
@@ -59,6 +64,7 @@ function buildParams(options: {
   countryGroup: CountryGroup;
   timeRange: TimeRange;
   today: TodayFilter;
+  statFilter: StatFilter;
   source: OpportunitySource;
   query: string;
 }) {
@@ -68,6 +74,7 @@ function buildParams(options: {
     countryGroup: options.countryGroup,
     timeRange: options.timeRange,
     today: options.today,
+    statFilter: options.statFilter,
     source: options.source,
   });
   if (options.category !== "Tümü") params.set("category", options.category);
@@ -82,6 +89,9 @@ export function OpportunityDashboard() {
   const [countryGroup, setCountryGroup] = useState<CountryGroup>("all");
   const [timeRange, setTimeRange] = useState<TimeRange>("near");
   const [today, setToday] = useState<TodayFilter>("all");
+  const [statFilter, setStatFilter] = useState<StatFilter>("all");
+  const [activeStatsCard, setActiveStatsCard] =
+    useState<StatsCardFilter | null>("near");
   const [source, setSource] = useState<OpportunitySource>("all");
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<ApiResponse["meta"] | null>(null);
@@ -165,6 +175,7 @@ export function OpportunityDashboard() {
         countryGroup,
         timeRange,
         today,
+        statFilter,
         source,
         query,
       });
@@ -195,7 +206,16 @@ export function OpportunityDashboard() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [category, countryGroup, dataVersion, query, source, timeRange, today]);
+  }, [
+    category,
+    countryGroup,
+    dataVersion,
+    query,
+    source,
+    statFilter,
+    timeRange,
+    today,
+  ]);
 
   async function loadMore() {
     const nextPage = page + 1;
@@ -205,6 +225,7 @@ export function OpportunityDashboard() {
       countryGroup,
       timeRange,
       today,
+      statFilter,
       source,
       query,
     });
@@ -230,12 +251,69 @@ export function OpportunityDashboard() {
 
   function changeToday(value: TodayFilter) {
     setToday(value);
+    setStatFilter("all");
+    setActiveStatsCard(
+      value === "ingested" || value === "published" || value === "deadline"
+        ? value
+        : null,
+    );
     if (value !== "all") setTimeRange("all");
+  }
+
+  function changeTimeRange(value: TimeRange) {
+    setTimeRange(value);
+    setToday("all");
+    setStatFilter("all");
+    setActiveStatsCard(value === "near" || value === "active" ? value : null);
+  }
+
+  function selectStatsFilter(filter: StatsCardFilter) {
+    setActiveStatsCard(filter);
+    setToday("all");
+    setStatFilter("all");
+
+    if (filter === "near" || filter === "active") {
+      setTimeRange(filter);
+    } else if (filter === "future" || filter === "noDate") {
+      setTimeRange(filter === "future" ? "active" : "all");
+      setStatFilter(filter);
+    } else {
+      setTimeRange("all");
+      setToday(filter);
+    }
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("firsatlar")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   const selectedSourceLabel =
     OPPORTUNITY_SOURCE_OPTIONS.find((option) => option.value === source)
       ?.label ?? "Bu kaynak";
+  const listTitle =
+    today === "ingested"
+      ? "Bugün sisteme eklenen kayıtlar"
+      : today === "published"
+        ? "Bugün yayımlanan kayıtlar"
+        : today === "deadline"
+          ? "Bugün son başvurusu olan fırsatlar"
+          : statFilter === "future"
+            ? "Gelecek çağrılar"
+            : statFilter === "noDate"
+              ? "Tarihi belirtilmemiş kayıtlar"
+              : timeRange === "near"
+                ? "Yakın fırsatlar"
+                : timeRange === "active"
+                  ? "Tüm aktif fırsatlar"
+                  : category === "Tümü"
+                    ? "Tüm fırsatlar"
+                    : category;
+  const resultCountLabel =
+    meta && opportunities.length < meta.count
+      ? `${meta.count} toplam kayıt · ${opportunities.length} kayıt gösteriliyor`
+      : `${meta?.count ?? 0} kayıt`;
 
   return (
     <div className="atlas-shell min-h-screen">
@@ -251,7 +329,11 @@ export function OpportunityDashboard() {
       />
 
       <div className="mx-auto max-w-[1440px] px-4 pb-8">
-        <StatsCards refreshToken={dataVersion} />
+        <StatsCards
+          refreshToken={dataVersion}
+          activeFilter={activeStatsCard}
+          onFilterSelect={selectStatsFilter}
+        />
         <div className="mt-6 grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
           <CategorySidebar
             selected={category}
@@ -269,10 +351,10 @@ export function OpportunityDashboard() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     <h1 className="text-xl font-bold sm:text-2xl">
-                      {category === "Tümü" ? "Tüm fırsatlar" : category}
+                      {listTitle}
                     </h1>
                     <span className="atlas-count rounded-full px-3 py-1 text-[10px] font-bold text-white">
-                      {meta?.count ?? 0} kayıt
+                      {resultCountLabel}
                     </span>
                   </div>
                 </div>
@@ -284,7 +366,7 @@ export function OpportunityDashboard() {
                   />
                 </div>
               </div>
-              <TimeRangeTabs value={timeRange} onChange={setTimeRange} />
+              <TimeRangeTabs value={timeRange} onChange={changeTimeRange} />
               <TodayFilterTabs value={today} onChange={changeToday} />
               <p className="atlas-muted text-[10px]">
                 “Bugün açılan çağrılar” filtresi, opening date ayrı bir veritabanı
@@ -337,31 +419,44 @@ export function OpportunityDashboard() {
             ) : today === "published" ? (
               <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
                 <p className="text-sm font-semibold">
-                  Bugün yayımlanan kayıt bulunamadı.
+                  Bu filtrede gösterilecek kayıt bulunamadı.
                 </p>
                 <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
-                  Bu, kaynaklarda bugün yeni yayın yakalanmadığı anlamına gelir.
-                  Bugün sisteme çekilen kayıtları görmek için “Bugün sisteme
-                  eklenen” filtresini deneyebilirsin.
+                  Bugün kaynaklarda yayımlanmış yeni kayıt yakalanmadı. Bugün
+                  sisteme eklenen kayıtları görmek için ilgili filtreyi
+                  deneyebilirsin.
+                </p>
+              </div>
+            ) : today === "ingested" ? (
+              <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
+                <p className="text-sm font-semibold">
+                  Bu filtrede gösterilecek kayıt bulunamadı.
+                </p>
+                <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
+                  Bugün sisteme yeni kayıt eklenmedi. Yenile butonuyla kaynakları
+                  tekrar kontrol edebilirsin.
                 </p>
               </div>
             ) : source !== "all" ? (
               <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
                 <p className="text-sm font-semibold">
-                  {selectedSourceLabel} kaynağından henüz kayıt gelmedi.
+                  Bu kaynaktan henüz kayıt gelmedi.
                 </p>
                 {source === "nato-diana" && (
-                  <p className="atlas-muted mt-2 text-xs">
-                    {meta?.sourceWorkerStatus?.status === "empty"
-                      ? "NATO DIANA worker çalıştı ama uygun kayıt bulunamadı."
-                      : "NATO DIANA worker kurulmuş durumda; GitHub WORKER_INGESTION_URL/WORKER_INGESTION_SECRET ve Vercel BOT_INGESTION_SECRET ayarları yapılmadan çalışmaz."}
+                  <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
+                    NATO DIANA kayıtları GitHub Actions worker üzerinden gelir.
+                    Worker çalıştırıldıktan sonra kayıtlar görünebilir.
                   </p>
                 )}
                 {source === "odtu-teknokent" && (
+                  <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
+                    ODTÜ Teknokent kaynağından henüz uygun kayıt gelmedi.
+                  </p>
+                )}
+                {source !== "nato-diana" && source !== "odtu-teknokent" && (
                   <p className="atlas-muted mt-2 text-xs">
-                    {meta?.sourceWorkerStatus?.status === "empty"
-                      ? "ODTÜ Teknokent worker çalıştı ama uygun kayıt bulunamadı."
-                      : "ODTÜ Teknokent normal scraper ve GitHub Actions browser worker ile desteklenir. Worker secretları ayarlanıp workflow çalıştırıldığında uygun kayıtlar burada görünür."}
+                    {selectedSourceLabel} için filtreleri değiştirerek tekrar
+                    deneyebilirsin.
                   </p>
                 )}
               </div>
@@ -385,8 +480,10 @@ export function OpportunityDashboard() {
                 )}
               </div>
             ) : (
-              <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center text-sm">
-                Bu filtrelerle eşleşen bir fırsat bulunamadı.
+              <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
+                <p className="text-sm font-semibold">
+                  Bu filtrede gösterilecek kayıt bulunamadı.
+                </p>
               </div>
             )}
           </main>

@@ -39,57 +39,75 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
   const linkLabel = getOpportunityLinkLabel(link);
 
   return (
-    <article className="atlas-card group flex min-h-[17rem] min-w-0 flex-col rounded-2xl p-5 transition duration-300 hover:-translate-y-1">
+    <article className="atlas-card group flex min-h-[27rem] min-w-0 flex-col rounded-2xl p-5 transition duration-300 hover:-translate-y-1">
       <OpportunityImage
         src={opportunity.image_url}
         alt={`${opportunity.title} görseli`}
       />
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-2">
-          <span
-            className={`rounded-full border bg-transparent px-3 py-1 text-[10px] font-bold ${categoryColors[opportunity.category]}`}
-          >
-            {opportunity.category}
-          </span>
-          <span
-            className={`rounded-full border bg-transparent px-2.5 py-1 text-[10px] font-semibold ${statusColors[status]}`}
-          >
-            {status}
-          </span>
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="atlas-muted text-[9px] font-bold uppercase tracking-[0.14em]">
+            Kaynak
+          </p>
+          <p className="atlas-text mt-1 truncate text-xs font-semibold">
+            {opportunity.source_name}
+          </p>
         </div>
         {opportunity.is_featured && (
-          <span className="text-lg text-[#ffd93d]" title="Öne çıkan">
+          <span className="shrink-0 text-lg text-[#ffd93d]" title="Öne çıkan">
             ✦
           </span>
         )}
       </div>
 
-      <div className="mt-5 flex-1">
-        <p className="atlas-muted text-xs font-semibold uppercase tracking-[0.16em]">
-          {opportunity.source_name}
-        </p>
-        <h3 className="atlas-text mt-3 text-lg font-semibold leading-7 tracking-[-0.02em]">
-          {opportunity.title}
-        </h3>
-        <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
-          {summary}
-        </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span
+          className={`rounded-full border bg-transparent px-3 py-1 text-[10px] font-bold ${categoryColors[opportunity.category]}`}
+        >
+          {opportunity.category}
+        </span>
+        <span
+          className={`rounded-full border bg-transparent px-2.5 py-1 text-[10px] font-semibold ${statusColors[status]}`}
+        >
+          {status}
+        </span>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--atlas-border)] pt-4">
-        <div className="atlas-muted min-w-0 text-xs">
-          {opportunity.location ?? "Online"}
-          <span className="mx-2 opacity-40">·</span>
-          {dateDisplay ? (
-            <span>
-              {dateDisplay.label}:{" "}
-              {dayjs(dateDisplay.value).format("DD.MM.YYYY")}
-            </span>
-          ) : (
-            <span>Tarih belirtilmemiş</span>
-          )}
+      <div className="mt-4 flex-1">
+        <h3 className="atlas-text text-lg font-semibold leading-7 tracking-[-0.02em]">
+          {opportunity.title}
+        </h3>
+        {summary && (
+          <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
+            {summary}
+          </p>
+        )}
+      </div>
+
+      <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-[var(--atlas-border)] pt-4 text-xs">
+        <div className="min-w-0">
+          <dt className="atlas-muted text-[9px] font-bold uppercase tracking-[0.12em]">
+            Bölge
+          </dt>
+          <dd className="atlas-text mt-1 truncate font-medium">
+            {opportunity.location ?? "Online"}
+          </dd>
         </div>
-        {link && linkLabel && (
+        <div className="min-w-0">
+          <dt className="atlas-muted text-[9px] font-bold uppercase tracking-[0.12em]">
+            Tarih
+          </dt>
+          <dd className="atlas-text mt-1 font-medium">
+            {dateDisplay
+              ? `${dateDisplay.label}: ${dayjs(dateDisplay.value).format("DD.MM.YYYY")}`
+              : "Tarih belirtilmemiş"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-4 flex justify-end">
+        {link && linkLabel ? (
           <a
             href={link}
             target="_blank"
@@ -99,6 +117,8 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
           >
             {linkLabel}
           </a>
+        ) : (
+          <span className="atlas-muted text-[10px]">Bağlantı bulunamadı</span>
         )}
       </div>
     </article>

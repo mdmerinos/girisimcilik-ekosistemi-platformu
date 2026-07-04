@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getOpportunityStatus,
   matchesOpportunitySearch,
+  matchesStatFilter,
   matchesTodayFilter,
   matchesTimeRange,
   normalizeSearchText,
@@ -181,6 +182,23 @@ test("today filters keep ingestion, publication and deadline semantics separate"
   assert.equal(matchesTodayFilter(item, "ingested", istanbulToday), true);
   assert.equal(matchesTodayFilter(item, "published", istanbulToday), false);
   assert.equal(matchesTodayFilter(item, "deadline", istanbulToday), true);
+});
+
+test("stat filters distinguish far-future and undated records", () => {
+  const future = opportunity({
+    unique_key: "future-stat",
+    deadline_at: "2027-09-15T00:00:00.000Z",
+  });
+  const near = opportunity({
+    unique_key: "near-stat",
+    deadline_at: "2026-10-01T00:00:00.000Z",
+  });
+  const noDate = opportunity({ unique_key: "no-date-stat" });
+
+  assert.equal(matchesStatFilter(future, "future", now), true);
+  assert.equal(matchesStatFilter(near, "future", now), false);
+  assert.equal(matchesStatFilter(noDate, "noDate", now), true);
+  assert.equal(matchesStatFilter(future, "noDate", now), false);
 });
 
 test("source filters recognize named sources and keep other records separate", () => {

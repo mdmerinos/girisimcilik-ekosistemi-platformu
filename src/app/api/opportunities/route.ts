@@ -12,9 +12,11 @@ import {
 } from "@/lib/opportunities/countryGroup";
 import { sanitizeNasaSbirOpportunityDates } from "@/lib/opportunities/nasaSbirDates";
 import {
+  STAT_FILTERS,
   TODAY_FILTERS,
   TIME_RANGES,
   matchesOpportunitySearch,
+  matchesStatFilter,
   matchesTodayFilter,
   matchesTimeRange,
   sortOpportunities,
@@ -38,6 +40,7 @@ const querySchema = z.object({
   countryGroup: z.enum(COUNTRY_GROUPS).default("all"),
   timeRange: z.enum(TIME_RANGES).default("near"),
   today: z.enum(TODAY_FILTERS).default("all"),
+  statFilter: z.enum(STAT_FILTERS).default("all"),
   source: z.enum(OPPORTUNITY_SOURCES).default("all"),
   q: z.string().trim().max(100).optional(),
 });
@@ -89,6 +92,7 @@ function prepareResponse(
     countryGroup,
     timeRange,
     today,
+    statFilter,
     source: sourceFilter,
     q,
   } = options;
@@ -102,6 +106,7 @@ function prepareResponse(
       (item) => today !== "all" || matchesTimeRange(item, timeRange, now),
     )
     .filter((item) => matchesTodayFilter(item, today, now))
+    .filter((item) => matchesStatFilter(item, statFilter, now))
     .filter((item) => matchesOpportunitySource(item, sourceFilter))
     .filter((item) => matchesOpportunitySearch(item, q));
 
@@ -148,6 +153,7 @@ function prepareResponse(
       hasMore: offset + data.length < filteredRows.length,
       timeRange,
       today,
+      statFilter,
       sourceFilter,
       sourceWorkerStatus,
       query: q ?? "",

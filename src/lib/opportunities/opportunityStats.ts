@@ -11,6 +11,7 @@ export type OpportunityStats = {
   addedToday: number;
   todayIngestedCount: number;
   todayPublishedCount: number;
+  todayDeadlineCount: number;
   nearCount: number;
   activeCount: number;
   farFutureCount: number;
@@ -59,6 +60,9 @@ export function calculateOpportunityStats(
     todayIngestedCount,
     todayPublishedCount: opportunities.filter((item) =>
       isSameIstanbulDay(item.published_at, now),
+    ).length,
+    todayDeadlineCount: opportunities.filter((item) =>
+      isSameIstanbulDay(item.deadline_at, now),
     ).length,
     nearCount: opportunities.filter((item) =>
       matchesTimeRange(item, "near", now),

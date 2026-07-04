@@ -18,6 +18,7 @@ const unavailableStats: OpportunityStats = {
   addedToday: 0,
   todayIngestedCount: 0,
   todayPublishedCount: 0,
+  todayDeadlineCount: 0,
   nearCount: 0,
   activeCount: 0,
   farFutureCount: 0,

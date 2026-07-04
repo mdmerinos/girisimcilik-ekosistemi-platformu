@@ -126,6 +126,14 @@ a {
   box-shadow: var(--atlas-shadow);
 }
 
+.atlas-stat-active {
+  border-color: var(--atlas-purple);
+  background: var(--atlas-glass-hover);
+  box-shadow:
+    var(--atlas-shadow),
+    inset 0 0 0 1px var(--atlas-purple);
+}
+
 .atlas-card:hover {
   background: var(--atlas-glass-hover);
   border-color: var(--atlas-border-hover);

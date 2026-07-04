@@ -9,6 +9,8 @@ export const TODAY_FILTERS = [
   "deadline",
 ] as const;
 export type TodayFilter = (typeof TODAY_FILTERS)[number];
+export const STAT_FILTERS = ["all", "future", "noDate"] as const;
+export type StatFilter = (typeof STAT_FILTERS)[number];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -127,6 +129,20 @@ export function matchesTimeRange(
   if (published === null) return false;
   if (timeRange === "active") return true;
   return published >= today - 90 * DAY_MS;
+}
+
+export function matchesStatFilter(
+  item: Pick<Opportunity, "deadline_at" | "published_at">,
+  statFilter: StatFilter,
+  now = new Date(),
+): boolean {
+  if (statFilter === "all") return true;
+  if (statFilter === "noDate") {
+    return !item.deadline_at && !item.published_at;
+  }
+
+  const deadline = validTime(item.deadline_at);
+  return deadline !== null && deadline > nearRangeEnd(now);
 }
 
 function sortBucket(
