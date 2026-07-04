@@ -10,11 +10,20 @@ import {
   RefreshStatus,
   type RefreshState,
 } from "@/components/home/RefreshStatus";
+import { SourceFilter } from "@/components/home/SourceFilter";
 import { StatsCards } from "@/components/home/StatsCards";
 import { TickerBar } from "@/components/home/TickerBar";
 import { TimeRangeTabs } from "@/components/home/TimeRangeTabs";
+import { TodayFilterTabs } from "@/components/home/TodayFilterTabs";
 import type { CountryGroup } from "@/lib/opportunities/countryGroup";
-import type { TimeRange } from "@/lib/opportunities/opportunityFilters";
+import type {
+  TimeRange,
+  TodayFilter,
+} from "@/lib/opportunities/opportunityFilters";
+import {
+  OPPORTUNITY_SOURCE_OPTIONS,
+  type OpportunitySource,
+} from "@/lib/opportunities/opportunitySource";
 import type { Opportunity } from "@/types/opportunity";
 
 type ApiResponse = {
@@ -25,10 +34,14 @@ type ApiResponse = {
     total: number;
     categoryCounts: Record<string, number>;
     lastUpdated: string | null;
+    lastDataAddedAt: string | null;
+    lastScanAt: string | null;
     page: number;
     limit: number;
     hasMore: boolean;
     timeRange: TimeRange;
+    today: TodayFilter;
+    sourceFilter: OpportunitySource;
     query: string;
   };
 };
@@ -40,6 +53,8 @@ function buildParams(options: {
   category: string;
   countryGroup: CountryGroup;
   timeRange: TimeRange;
+  today: TodayFilter;
+  source: OpportunitySource;
   query: string;
 }) {
   const params = new URLSearchParams({
@@ -47,10 +62,10 @@ function buildParams(options: {
     page: String(options.page),
     countryGroup: options.countryGroup,
     timeRange: options.timeRange,
+    today: options.today,
+    source: options.source,
   });
-  if (options.category !== "Tümü") {
-    params.set("category", options.category);
-  }
+  if (options.category !== "Tümü") params.set("category", options.category);
   if (options.query.trim()) params.set("q", options.query.trim());
   return params;
 }
@@ -61,30 +76,60 @@ export function OpportunityDashboard() {
   const [category, setCategory] = useState("Tümü");
   const [countryGroup, setCountryGroup] = useState<CountryGroup>("all");
   const [timeRange, setTimeRange] = useState<TimeRange>("near");
+  const [today, setToday] = useState<TodayFilter>("all");
+  const [source, setSource] = useState<OpportunitySource>("all");
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<ApiResponse["meta"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshLabel, setRefreshLabel] = useState<string>();
   const [refreshState, setRefreshState] = useState<RefreshState | null>(null);
+  const [dataVersion, setDataVersion] = useState(0);
 
-  async function checkForRefresh() {
+  async function forceRefresh() {
     setRefreshing(true);
+    setRefreshLabel("Yenileme başlatılıyor…");
+    setRefreshState({
+      ok: true,
+      status: "started",
+      lastSuccessfulIngestionAt: meta?.lastScanAt ?? null,
+      message: "Yenileme başlatılıyor…",
+    });
+
+    window.setTimeout(
+      () => setRefreshLabel("Kaynaklar kontrol ediliyor…"),
+      0,
+    );
+
     try {
-      const response = await fetch("/api/refresh-if-stale", {
+      const response = await fetch("/api/refresh-if-stale?force=true", {
         method: "POST",
         cache: "no-store",
       });
-      setRefreshState((await response.json()) as RefreshState);
-    } catch {
+      const payload = (await response.json()) as RefreshState & {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Yenileme başlatılamadı.");
+      }
+      setRefreshState(payload);
+      if (payload.status === "completed") {
+        setDataVersion((value) => value + 1);
+      }
+    } catch (error) {
       setRefreshState({
         ok: false,
         status: "error",
-        lastSuccessfulIngestionAt: null,
-        message: "Veriler gösteriliyor, güncelleme daha sonra tekrar denenecek.",
+        lastSuccessfulIngestionAt: meta?.lastScanAt ?? null,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Yenileme daha sonra tekrar denenebilir.",
       });
     } finally {
       setRefreshing(false);
+      setRefreshLabel(undefined);
     }
   }
 
@@ -114,6 +159,8 @@ export function OpportunityDashboard() {
         category,
         countryGroup,
         timeRange,
+        today,
+        source,
         query,
       });
 
@@ -143,7 +190,7 @@ export function OpportunityDashboard() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [category, countryGroup, query, timeRange]);
+  }, [category, countryGroup, dataVersion, query, source, timeRange, today]);
 
   async function loadMore() {
     const nextPage = page + 1;
@@ -152,6 +199,8 @@ export function OpportunityDashboard() {
       category,
       countryGroup,
       timeRange,
+      today,
+      source,
       query,
     });
 
@@ -174,19 +223,30 @@ export function OpportunityDashboard() {
     }
   }
 
+  function changeToday(value: TodayFilter) {
+    setToday(value);
+    if (value !== "all") setTimeRange("all");
+  }
+
+  const selectedSourceLabel =
+    OPPORTUNITY_SOURCE_OPTIONS.find((option) => option.value === source)
+      ?.label ?? "Bu kaynak";
+
   return (
     <div className="atlas-shell min-h-screen">
       <TickerBar items={opportunities} />
       <HomeHeader
         query={query}
         onQueryChange={setQuery}
-        onRefresh={() => void checkForRefresh()}
+        onRefresh={() => void forceRefresh()}
         refreshing={refreshing}
-        lastUpdated={meta?.lastUpdated ?? null}
+        refreshLabel={refreshLabel}
+        lastScanAt={meta?.lastScanAt ?? null}
+        lastDataAddedAt={meta?.lastDataAddedAt ?? null}
       />
 
       <div className="mx-auto max-w-[1440px] px-4 pb-8">
-        <StatsCards />
+        <StatsCards refreshToken={dataVersion} />
         <div className="mt-6 grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
           <CategorySidebar
             selected={category}
@@ -197,7 +257,7 @@ export function OpportunityDashboard() {
 
           <main id="firsatlar" className="min-w-0">
             <div className="mb-5 flex flex-col gap-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="atlas-muted text-[10px] font-bold uppercase tracking-[0.16em]">
                     Canlı ekosistem panosu
@@ -211,12 +271,21 @@ export function OpportunityDashboard() {
                     </span>
                   </div>
                 </div>
-                <CountryFilterTabs
-                  value={countryGroup}
-                  onChange={setCountryGroup}
-                />
+                <div className="flex flex-wrap items-end gap-3">
+                  <SourceFilter value={source} onChange={setSource} />
+                  <CountryFilterTabs
+                    value={countryGroup}
+                    onChange={setCountryGroup}
+                  />
+                </div>
               </div>
               <TimeRangeTabs value={timeRange} onChange={setTimeRange} />
+              <TodayFilterTabs value={today} onChange={changeToday} />
+              <p className="atlas-muted text-[10px]">
+                “Bugün açılan çağrılar” filtresi, opening date ayrı bir veritabanı
+                alanında tutulmadığı için yanlış sonuç üretmemek adına henüz
+                gösterilmiyor.
+              </p>
             </div>
 
             <RefreshStatus state={refreshState} />
@@ -260,6 +329,29 @@ export function OpportunityDashboard() {
                   </div>
                 )}
               </>
+            ) : today === "published" ? (
+              <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
+                <p className="text-sm font-semibold">
+                  Bugün yayımlanan kayıt bulunamadı.
+                </p>
+                <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
+                  Bu, kaynaklarda bugün yeni yayın yakalanmadığı anlamına gelir.
+                  Bugün sisteme çekilen kayıtları görmek için “Bugün sisteme
+                  eklenen” filtresini deneyebilirsin.
+                </p>
+              </div>
+            ) : source !== "all" ? (
+              <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
+                <p className="text-sm font-semibold">
+                  {selectedSourceLabel} kaynağından henüz kayıt gelmedi.
+                </p>
+                {source === "nato-diana" && (
+                  <p className="atlas-muted mt-2 text-xs">
+                    NATO DIANA bot koruması nedeniyle normal fetch ile 403
+                    döndürebiliyor. Harici worker ayarı gerekiyor.
+                  </p>
+                )}
+              </div>
             ) : query.trim() ? (
               <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
                 <p className="text-sm font-semibold">

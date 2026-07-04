@@ -28,6 +28,7 @@ const unavailableStats: OpportunityStats = {
   nationalSupports: 0,
   internationalFunds: 0,
   lastSuccessfulUpdate: null,
+  lastDataAddedAt: null,
 };
 
 async function getAllOpportunityRows(): Promise<Opportunity[]> {

@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   getOpportunityStatus,
   matchesOpportunitySearch,
+  matchesTodayFilter,
   matchesTimeRange,
   normalizeSearchText,
   sortOpportunities,
 } from "@/lib/opportunities/opportunityFilters";
+import { matchesOpportunitySource } from "@/lib/opportunities/opportunitySource";
+import { formatDateTime } from "@/lib/utils/formatDateTime";
 import type { Opportunity } from "@/types/opportunity";
 
 const now = new Date("2026-07-04T12:00:00.000Z");
@@ -162,5 +165,60 @@ test("status labels distinguish open, future, closed and unknown records", () =>
   assert.equal(
     getOpportunityStatus(opportunity({ unique_key: "unknown" }), now),
     "Tarih belirsiz",
+  );
+});
+
+test("today filters keep ingestion, publication and deadline semantics separate", () => {
+  const item = opportunity({
+    unique_key: "today",
+    created_at: "2026-07-03T22:30:00.000Z",
+    fetched_at: "2026-07-03T22:30:00.000Z",
+    published_at: "2026-07-03T18:00:00.000Z",
+    deadline_at: "2026-07-04T20:00:00.000Z",
+  });
+  const istanbulToday = new Date("2026-07-04T00:30:00.000Z");
+
+  assert.equal(matchesTodayFilter(item, "ingested", istanbulToday), true);
+  assert.equal(matchesTodayFilter(item, "published", istanbulToday), false);
+  assert.equal(matchesTodayFilter(item, "deadline", istanbulToday), true);
+});
+
+test("source filters recognize named sources and keep other records separate", () => {
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
+        unique_key: "odtu",
+        source_name: "ODTÜ Teknokent",
+      }),
+      "odtu-teknokent",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
+        unique_key: "nato",
+        source_name: "NATO DIANA",
+      }),
+      "nato-diana",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
+        unique_key: "other",
+        source_name: "TechCrunch",
+      }),
+      "other",
+    ),
+    true,
+  );
+});
+
+test("date-time formatting always uses two digits and Istanbul time", () => {
+  assert.equal(
+    formatDateTime("2026-07-04T15:53:00.000Z"),
+    "04.07.2026 18:53",
   );
 });

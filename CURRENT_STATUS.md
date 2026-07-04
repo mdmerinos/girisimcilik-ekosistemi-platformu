@@ -159,3 +159,25 @@ Sandbox dış ağa erişemediği için yerel smoke test fallback kaynağı üzer
 - GitHub Actions NATO worker secretları ayarlanmalı ve workflow ilk kez
   manuel çalıştırılmalıdır.
 - Değişiklikler kullanıcı onayından sonra commit/push edilebilir.
+
+## 4 Temmuz 2026 — canlı yenileme ve günlük görünürlük
+
+- Ana sayfadaki Yenile düğmesi artık
+  `/api/refresh-if-stale?force=true` endpointine POST gönderir.
+- Force yenileme freshness kontrolünü aşar; çalışan-job kilidi, 30 dakikalık
+  global cooldown ve aynı-origin kontrolü korunur.
+- Yenileme tamamlanınca yeni/güncellenen kayıt ve kaynak durumları güvenli,
+  secret içermeyen bir raporla gösterilir.
+- Fırsat listesi ve `/api/stats`, aktif filtreler korunarak otomatik yenilenir.
+- `today=ingested|published|deadline|all` filtreleri eklendi.
+- `source=all|tubitak|kosgeb|eu-funding|grants-gov|odtu-teknokent|nato-diana|nasa-sbir|other`
+  filtresi eklendi.
+- Dashboard’a bugün ve kaynak filtreleri eklendi. Opening date ayrı şema alanı
+  olmadığı için “Bugün açılan çağrılar” yanlış veri üretmemek adına gösterilmez.
+- Son başarılı kaynak taraması ile son veri eklenme zamanı ayrıldı.
+- Tarih-saat gösterimi İstanbul saatinde `DD.MM.YYYY HH:mm` biçimindedir.
+- Admin ingestion ekranı kaynak slug, yöntem/worker, son çalışma, son başarı,
+  bulunan/yeni/güncellenen, durum, hata ve mevcut HTTP bilgisini gösterir.
+- Mevcut 40+ RSS/API/HTML kaynak kataloğu incelendi; doğrulanmamış yeni kaynak
+  veya sahte veri eklenmedi.
+- Kontroller: typecheck başarılı, lint başarılı, testler 58/58, build başarılı.

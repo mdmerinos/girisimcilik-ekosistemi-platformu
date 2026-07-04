@@ -4,6 +4,7 @@ export const REFRESH_COOLDOWN_MS = 30 * 60 * 1000;
 export type RefreshIfStaleStatus =
   | "fresh"
   | "started"
+  | "completed"
   | "already_running"
   | "cooldown"
   | "error";
@@ -20,6 +21,7 @@ type RefreshDecisionInput = {
   lastSuccessfulIngestionAt: string | null;
   lastAttemptAt: string | null;
   isRunning: boolean;
+  force?: boolean;
   staleAfterMs?: number;
   cooldownMs?: number;
 };
@@ -36,6 +38,7 @@ export function decideRefreshIfStale({
   lastSuccessfulIngestionAt,
   lastAttemptAt,
   isRunning,
+  force = false,
   staleAfterMs = STALE_AFTER_MS,
   cooldownMs = REFRESH_COOLDOWN_MS,
 }: RefreshDecisionInput): RefreshIfStaleResult {
@@ -48,12 +51,13 @@ export function decideRefreshIfStale({
     };
   }
 
-  if (isWithin(lastSuccessfulIngestionAt, now, staleAfterMs)) {
+  if (!force && isWithin(lastSuccessfulIngestionAt, now, staleAfterMs)) {
     return {
       ok: true,
       status: "fresh",
       lastSuccessfulIngestionAt,
-      message: "Veriler güncel.",
+      message:
+        "Veriler zaten güncel görünüyor. Zorla yenilemek için Yenile düğmesini kullanabilirsin.",
     };
   }
 

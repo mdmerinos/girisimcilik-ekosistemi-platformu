@@ -2,6 +2,13 @@ import type { Opportunity } from "@/types/opportunity";
 
 export const TIME_RANGES = ["near", "active", "all"] as const;
 export type TimeRange = (typeof TIME_RANGES)[number];
+export const TODAY_FILTERS = [
+  "all",
+  "ingested",
+  "published",
+  "deadline",
+] as const;
+export type TodayFilter = (typeof TODAY_FILTERS)[number];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -15,6 +22,47 @@ function startOfDay(value: Date): number {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
   return date.getTime();
+}
+
+function dateKey(value: string | Date): string | null {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export function isSameIstanbulDay(
+  value: string | null | undefined,
+  now = new Date(),
+): boolean {
+  return Boolean(value && dateKey(value) === dateKey(now));
+}
+
+export function matchesTodayFilter(
+  item: Pick<
+    Opportunity,
+    "created_at" | "fetched_at" | "published_at" | "deadline_at"
+  >,
+  filter: TodayFilter,
+  now = new Date(),
+): boolean {
+  if (filter === "all") return true;
+  const today = dateKey(now);
+  if (!today) return false;
+
+  if (filter === "ingested") {
+    return (
+      dateKey(item.created_at) === today || dateKey(item.fetched_at) === today
+    );
+  }
+  if (filter === "published") {
+    return isSameIstanbulDay(item.published_at, now);
+  }
+  return isSameIstanbulDay(item.deadline_at, now);
 }
 
 export function nearRangeEnd(now: Date): number {

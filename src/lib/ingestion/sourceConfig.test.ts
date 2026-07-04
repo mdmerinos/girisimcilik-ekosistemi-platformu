@@ -23,6 +23,7 @@ import {
 import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
 import { calculateOpportunityStats } from "@/lib/opportunities/opportunityStats";
 import { decideRefreshIfStale } from "@/lib/ingestion/refreshDecision";
+import { toPublicIngestionResult } from "@/lib/ingestion/publicIngestionResult";
 import { sourceConfigs } from "@/lib/ingestion/sourceConfig";
 import {
   classifySourceError,
@@ -266,6 +267,88 @@ test("refresh-if-stale response does not expose secrets", () => {
     "ok",
     "status",
   ]);
+  assert.equal(JSON.stringify(result).includes("SECRET"), false);
+});
+
+test("force refresh bypasses freshness but preserves the global cooldown", () => {
+  const now = new Date("2026-07-03T12:00:00.000Z");
+
+  assert.equal(
+    decideRefreshIfStale({
+      now,
+      lastSuccessfulIngestionAt: "2026-07-03T11:00:00.000Z",
+      lastAttemptAt: "2026-07-03T10:00:00.000Z",
+      isRunning: false,
+      force: true,
+    }).status,
+    "started",
+  );
+  assert.equal(
+    decideRefreshIfStale({
+      now,
+      lastSuccessfulIngestionAt: "2026-07-03T11:00:00.000Z",
+      lastAttemptAt: "2026-07-03T11:45:00.000Z",
+      isRunning: false,
+      force: true,
+    }).status,
+    "cooldown",
+  );
+});
+
+test("public refresh result exposes source counts without secrets", () => {
+  const result = toPublicIngestionResult({
+    runId: "run-1",
+    status: "partial",
+    sources: [
+      {
+        sourceId: "odtu-teknokent",
+        sourceName: "ODTÜ Teknokent",
+        kind: "html",
+        fragile: true,
+        requiresApiKey: false,
+        status: "success",
+        collected: 12,
+        inserted: 2,
+        updated: 10,
+        skipped: 0,
+        durationMs: 100,
+        error: null,
+      },
+      {
+        sourceId: "nato-diana",
+        sourceName: "NATO DIANA",
+        kind: "html",
+        fragile: true,
+        requiresApiKey: false,
+        status: "fragile",
+        collected: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        durationMs: 100,
+        error: "Bot koruması",
+      },
+    ],
+    totals: {
+      collected: 12,
+      inserted: 2,
+      updated: 10,
+      skipped: 0,
+      errors: 0,
+      statuses: {
+        success: 1,
+        partial: 0,
+        empty: 0,
+        skipped: 0,
+        fragile: 1,
+        error: 0,
+      },
+    },
+  });
+
+  assert.equal(result.totals.successfulSources, 1);
+  assert.equal(result.totals.issueSources, 1);
+  assert.equal(result.sources[1].workerRequired, true);
   assert.equal(JSON.stringify(result).includes("SECRET"), false);
 });
 

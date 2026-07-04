@@ -40,6 +40,7 @@ type StoredLog = {
   id: number;
   source_id: string;
   source_name: string;
+  source_kind: "rss" | "html" | "api";
   status: SourceResult["status"];
   collected_count: number;
   inserted_count: number;
@@ -47,6 +48,8 @@ type StoredLog = {
   skipped_count: number;
   duration_ms: number;
   error_message: string | null;
+  finished_at: string | null;
+  created_at: string;
 };
 
 type StoredRun = {
@@ -82,6 +85,7 @@ type AdminStats = {
 type SourceCatalogItem = {
   id: string;
   name: string;
+  kind: "rss" | "html" | "api";
   fragile: boolean;
   requiresApiKey: boolean;
   configured: boolean;
@@ -175,6 +179,35 @@ export function IngestionControl() {
       };
     }) ??
     [];
+
+  const sourceRows = sourceCatalog.map((source) => {
+    const latestRun = runs.find((run) =>
+      run.logs.some((log) => log.source_id === source.id),
+    );
+    const latestLog = latestRun?.logs.find(
+      (log) => log.source_id === source.id,
+    );
+    const successfulRun = runs.find((run) =>
+      run.logs.some(
+        (log) =>
+          log.source_id === source.id &&
+          (log.status === "success" || log.status === "partial"),
+      ),
+    );
+    const successfulLog = successfulRun?.logs.find(
+      (log) =>
+        log.source_id === source.id &&
+        (log.status === "success" || log.status === "partial"),
+    );
+
+    return {
+      source,
+      latestRun,
+      latestLog,
+      successfulRun,
+      successfulLog,
+    };
+  });
 
   return (
     <div className="mt-8">
@@ -356,6 +389,109 @@ export function IngestionControl() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {sourceRows.length > 0 && (
+        <div className="mt-8 overflow-x-auto">
+          <h2 className="mb-3 text-sm font-semibold text-[#25372c]">
+            Kaynak operasyon durumu
+          </h2>
+          <table className="w-full min-w-[1280px] text-left text-xs">
+            <thead className="border-b border-[#dfe5df] text-[#748078]">
+              <tr>
+                <th className="px-3 py-3 font-semibold">Kaynak / slug</th>
+                <th className="px-3 py-3 font-semibold">Yöntem</th>
+                <th className="px-3 py-3 font-semibold">Son çalışma</th>
+                <th className="px-3 py-3 font-semibold">Son başarılı</th>
+                <th className="px-3 py-3 font-semibold">Bulunan</th>
+                <th className="px-3 py-3 font-semibold">Yeni</th>
+                <th className="px-3 py-3 font-semibold">Güncellenen</th>
+                <th className="px-3 py-3 font-semibold">Durum</th>
+                <th className="px-3 py-3 font-semibold">HTTP</th>
+                <th className="px-3 py-3 font-semibold">Son mesaj</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sourceRows.map(
+                ({
+                  source,
+                  latestRun,
+                  latestLog,
+                  successfulRun,
+                  successfulLog,
+                }) => (
+                  <tr key={source.id} className="border-b border-[#edf0ed]">
+                    <td className="px-3 py-3">
+                      <p className="font-semibold text-[#25372c]">
+                        {source.name}
+                      </p>
+                      <code className="text-[10px] text-[#748078]">
+                        {source.id}
+                      </code>
+                    </td>
+                    <td className="px-3 py-3">
+                      {source.id === "nato-diana"
+                        ? "Normal fetch + worker"
+                        : `Normal ${source.kind.toUpperCase()}`}
+                    </td>
+                    <td className="px-3 py-3">
+                      {formatDate(
+                        latestLog?.finished_at ??
+                          latestRun?.finished_at ??
+                          latestRun?.started_at ??
+                          null,
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {successfulLog
+                        ? formatDate(
+                            successfulLog.finished_at ??
+                              successfulRun?.finished_at ??
+                              null,
+                          )
+                        : "Henüz yok"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {latestLog?.collected_count ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {latestLog?.inserted_count ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {latestLog?.updated_count ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {latestLog ? (
+                        <span
+                          className={`rounded-full px-2 py-1 ${
+                            SOURCE_STATUS_PRESENTATION[latestLog.status]
+                              .className
+                          }`}
+                        >
+                          {latestLog.status}
+                        </span>
+                      ) : (
+                        "Henüz yok"
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {source.id === "nato-diana" &&
+                      latestLog?.status === "fragile"
+                        ? "403"
+                        : "—"}
+                    </td>
+                    <td className="max-w-xs px-3 py-3 text-[#78684a]">
+                      {latestLog?.error_message ??
+                        (source.id === "nato-diana"
+                          ? "Bot korumasında harici worker gerekir."
+                          : "—")}
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>

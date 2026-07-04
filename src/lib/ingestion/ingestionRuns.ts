@@ -100,7 +100,7 @@ export async function finishIngestionRun(
   if (error) throw error;
 }
 
-export async function getRecentIngestionRuns(limit = 10) {
+export async function getRecentIngestionRuns(limit = 50) {
   const supabase = createAdminSupabaseClient();
   const { data: runs, error: runsError } = await supabase
     .from("ingestion_runs")

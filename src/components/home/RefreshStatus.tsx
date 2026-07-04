@@ -1,24 +1,104 @@
+import type { SourceStatus } from "@/lib/ingestion/sourceStatus";
+
+type PublicSourceResult = {
+  sourceId: string;
+  sourceName: string;
+  status: SourceStatus;
+  collected: number;
+  inserted: number;
+  updated: number;
+  error: string | null;
+  workerRequired: boolean;
+};
+
 export type RefreshState = {
   ok: boolean;
-  status: "fresh" | "started" | "already_running" | "cooldown" | "error";
+  status:
+    | "fresh"
+    | "started"
+    | "completed"
+    | "already_running"
+    | "cooldown"
+    | "error";
   lastSuccessfulIngestionAt: string | null;
   message: string;
+  result?: {
+    runId: string;
+    status: "success" | "partial" | "failed";
+    sources: PublicSourceResult[];
+    totals: {
+      collected: number;
+      inserted: number;
+      updated: number;
+      skipped: number;
+      errors: number;
+      successfulSources: number;
+      issueSources: number;
+    };
+  };
 };
+
+function sourceMessage(source: PublicSourceResult): string {
+  if (source.workerRequired && source.status !== "success") {
+    return "Normal fetch bot korumasına takılabilir; harici worker ayarı gerekiyor.";
+  }
+  if (source.error) return source.error;
+  if (source.status === "empty") {
+    return "Bu kaynak geçici olarak veri döndürmedi.";
+  }
+  return `${source.collected} kayıt bulundu, ${source.inserted} yeni, ${source.updated} güncellendi.`;
+}
 
 export function RefreshStatus({ state }: { state: RefreshState | null }) {
   if (!state) return null;
 
   return (
-    <p
-      className={`atlas-status inline-flex rounded-full px-3 py-1.5 text-[11px] font-semibold ${
+    <section
+      className={`atlas-panel rounded-2xl p-4 ${
         state.status === "error" ? "is-error" : ""
       }`}
-      role="status"
+      aria-live="polite"
     >
-      <span className="mr-2" aria-hidden="true">
-        {state.status === "error" ? "!" : "●"}
-      </span>
-      {state.message}
-    </p>
+      <p className="text-sm font-semibold" role="status">
+        <span className="mr-2" aria-hidden="true">
+          {state.status === "error" ? "!" : "●"}
+        </span>
+        {state.message}
+      </p>
+
+      {state.result && (
+        <>
+          <div className="atlas-muted mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+            <span>{state.result.totals.inserted} yeni kayıt</span>
+            <span>{state.result.totals.updated} güncelleme</span>
+            <span>
+              {state.result.totals.successfulSources} başarılı kaynak
+            </span>
+            <span>{state.result.totals.issueSources} sorunlu/boş kaynak</span>
+          </div>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs font-semibold">
+              Kaynak bazlı yenileme raporu
+            </summary>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {state.result.sources.map((source) => (
+                <article
+                  key={source.sourceId}
+                  className="atlas-control rounded-xl p-3 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <strong>{source.sourceName}</strong>
+                    <span className="atlas-muted">{source.status}</span>
+                  </div>
+                  <p className="atlas-muted mt-1 leading-5">
+                    {sourceMessage(source)}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </details>
+        </>
+      )}
+    </section>
   );
 }

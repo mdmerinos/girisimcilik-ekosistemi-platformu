@@ -6,11 +6,21 @@ import {
 import { decideRefreshIfStale } from "@/lib/ingestion/refreshDecision";
 import type { RefreshIfStaleResult } from "@/lib/ingestion/refreshDecision";
 import {
+  toPublicIngestionResult,
+  type PublicIngestionResult,
+} from "@/lib/ingestion/publicIngestionResult";
+import {
   IngestionAlreadyRunningError,
   runIngestion,
 } from "@/lib/ingestion/runIngestion";
 
-export async function refreshIfStale(): Promise<RefreshIfStaleResult> {
+export type RefreshResult = RefreshIfStaleResult & {
+  result?: PublicIngestionResult;
+};
+
+export async function refreshIfStale(
+  options: { force?: boolean; waitForCompletion?: boolean } = {},
+): Promise<RefreshResult> {
   try {
     const [runningRun, latestSuccessfulRun, latestRun] = await Promise.all([
       getRunningIngestionRun(),
@@ -22,9 +32,21 @@ export async function refreshIfStale(): Promise<RefreshIfStaleResult> {
       lastSuccessfulIngestionAt: latestSuccessfulRun?.finished_at ?? null,
       lastAttemptAt: latestRun?.started_at ?? null,
       isRunning: Boolean(runningRun),
+      force: options.force,
     });
 
     if (decision.status !== "started") return decision;
+
+    if (options.waitForCompletion) {
+      const result = await runIngestion(options.force ? "manual" : "cron");
+      return {
+        ...decision,
+        status: "completed",
+        lastSuccessfulIngestionAt: new Date().toISOString(),
+        message: "Yenileme tamamlandı.",
+        result: toPublicIngestionResult(result),
+      };
+    }
 
     void runIngestion("cron").catch((error) => {
       if (error instanceof IngestionAlreadyRunningError) return;
@@ -33,6 +55,15 @@ export async function refreshIfStale(): Promise<RefreshIfStaleResult> {
 
     return decision;
   } catch (error) {
+    if (error instanceof IngestionAlreadyRunningError) {
+      return {
+        ok: true,
+        status: "already_running",
+        lastSuccessfulIngestionAt: null,
+        message: "Veriler şu anda güncelleniyor.",
+      };
+    }
+
     console.error("Refresh-if-stale check failed:", error);
     return {
       ok: false,

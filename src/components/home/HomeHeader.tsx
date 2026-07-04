@@ -1,13 +1,16 @@
 import Link from "next/link";
 
 import { ThemeToggle } from "@/components/home/ThemeToggle";
+import { formatDateTime } from "@/lib/utils/formatDateTime";
 
 type HomeHeaderProps = {
   query: string;
   onQueryChange: (value: string) => void;
   onRefresh: () => void;
   refreshing: boolean;
-  lastUpdated: string | null;
+  refreshLabel?: string;
+  lastScanAt: string | null;
+  lastDataAddedAt: string | null;
 };
 
 export function HomeHeader({
@@ -15,7 +18,9 @@ export function HomeHeader({
   onQueryChange,
   onRefresh,
   refreshing,
-  lastUpdated,
+  refreshLabel,
+  lastScanAt,
+  lastDataAddedAt,
 }: HomeHeaderProps) {
   return (
     <header className="atlas-header mx-auto flex max-w-[1440px] flex-col gap-5 px-4 py-6 lg:flex-row lg:items-center lg:justify-between">
@@ -50,7 +55,7 @@ export function HomeHeader({
           disabled={refreshing}
           className="atlas-refresh rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
         >
-          {refreshing ? "Kontrol ediliyor…" : "Yenile"}
+          {refreshing ? refreshLabel ?? "Kaynaklar kontrol ediliyor…" : "Yenile"}
         </button>
         <ThemeToggle />
         <Link
@@ -61,18 +66,23 @@ export function HomeHeader({
         </Link>
       </div>
 
-      <div className="atlas-muted text-xs lg:text-right">
-        <span className="block text-[10px] uppercase tracking-[0.14em]">
-          Son güncelleme
-        </span>
-        <strong className="atlas-text mt-1 block font-medium">
-          {lastUpdated
-            ? new Intl.DateTimeFormat("tr-TR", {
-                dateStyle: "short",
-                timeStyle: "short",
-              }).format(new Date(lastUpdated))
-            : "—"}
-        </strong>
+      <div className="atlas-muted space-y-2 text-xs lg:text-right">
+        <div>
+          <span className="block text-[10px] uppercase tracking-[0.14em]">
+            Son kaynak taraması
+          </span>
+          <strong className="atlas-text mt-1 block font-medium">
+            {formatDateTime(lastScanAt)}
+          </strong>
+        </div>
+        <div>
+          <span className="block text-[10px] uppercase tracking-[0.14em]">
+            Son veri eklenme
+          </span>
+          <strong className="atlas-text mt-1 block font-medium">
+            {formatDateTime(lastDataAddedAt)}
+          </strong>
+        </div>
       </div>
     </header>
   );

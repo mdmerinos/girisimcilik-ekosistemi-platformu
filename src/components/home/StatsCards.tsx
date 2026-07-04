@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { OpportunityStats } from "@/lib/opportunities/opportunityStats";
+import { formatDateTime } from "@/lib/utils/formatDateTime";
 
 type StatsResponse = {
   data: OpportunityStats;
@@ -25,9 +26,10 @@ const EMPTY: OpportunityStats = {
   nationalSupports: 0,
   internationalFunds: 0,
   lastSuccessfulUpdate: null,
+  lastDataAddedAt: null,
 };
 
-export function StatsCards() {
+export function StatsCards({ refreshToken = 0 }: { refreshToken?: number }) {
   const [stats, setStats] = useState<OpportunityStats>(EMPTY);
   const [available, setAvailable] = useState(false);
 
@@ -39,7 +41,7 @@ export function StatsCards() {
         setAvailable(payload.meta.source === "supabase");
       })
       .catch(() => setAvailable(false));
-  }, []);
+  }, [refreshToken]);
 
   const cards = [
     ["Yakın fırsatlar", stats.nearCount],
@@ -49,14 +51,10 @@ export function StatsCards() {
     ["Bugün sisteme eklenen", stats.todayIngestedCount],
     ["Bugün yayımlanan", stats.todayPublishedCount],
     [
-      "Son başarılı güncelleme",
-      stats.lastSuccessfulUpdate
-        ? new Intl.DateTimeFormat("tr-TR", {
-            dateStyle: "short",
-            timeStyle: "short",
-          }).format(new Date(stats.lastSuccessfulUpdate))
-        : "—",
+      "Son başarılı kaynak taraması",
+      formatDateTime(stats.lastSuccessfulUpdate),
     ],
+    ["Son veri eklenme zamanı", formatDateTime(stats.lastDataAddedAt)],
   ] as const;
 
   return (

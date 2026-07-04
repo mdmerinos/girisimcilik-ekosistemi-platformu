@@ -1,4 +1,5 @@
 import {
+  isSameIstanbulDay,
   matchesTimeRange,
   nearRangeEnd,
 } from "@/lib/opportunities/opportunityFilters";
@@ -20,22 +21,13 @@ export type OpportunityStats = {
   nationalSupports: number;
   internationalFunds: number;
   lastSuccessfulUpdate: string | null;
+  lastDataAddedAt: string | null;
 };
 
 function validDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
-}
-
-function isSameLocalDay(value: string | null | undefined, now: Date): boolean {
-  const date = validDate(value);
-  return Boolean(
-    date &&
-      date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate(),
-  );
 }
 
 export function calculateOpportunityStats(
@@ -48,8 +40,17 @@ export function calculateOpportunityStats(
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const farFutureBoundary = nearRangeEnd(now);
   const todayIngestedCount = opportunities.filter((item) =>
-    isSameLocalDay(item.created_at ?? item.fetched_at, now),
+    Boolean(
+      isSameIstanbulDay(item.created_at, now) ||
+        isSameIstanbulDay(item.fetched_at, now),
+    ),
   ).length;
+  const lastDataAddedAt =
+    opportunities
+      .map((item) => item.created_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
 
   return {
     total: opportunities.length,
@@ -57,7 +58,7 @@ export function calculateOpportunityStats(
     addedToday: todayIngestedCount,
     todayIngestedCount,
     todayPublishedCount: opportunities.filter((item) =>
-      isSameLocalDay(item.published_at, now),
+      isSameIstanbulDay(item.published_at, now),
     ).length,
     nearCount: opportunities.filter((item) =>
       matchesTimeRange(item, "near", now),
@@ -96,5 +97,6 @@ export function calculateOpportunityStats(
       (item) => item.category === "Uluslararası Fonlar",
     ).length,
     lastSuccessfulUpdate,
+    lastDataAddedAt,
   };
 }

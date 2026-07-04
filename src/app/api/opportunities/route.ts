@@ -12,11 +12,17 @@ import {
 } from "@/lib/opportunities/countryGroup";
 import { sanitizeNasaSbirOpportunityDates } from "@/lib/opportunities/nasaSbirDates";
 import {
+  TODAY_FILTERS,
   TIME_RANGES,
   matchesOpportunitySearch,
+  matchesTodayFilter,
   matchesTimeRange,
   sortOpportunities,
 } from "@/lib/opportunities/opportunityFilters";
+import {
+  OPPORTUNITY_SOURCES,
+  matchesOpportunitySource,
+} from "@/lib/opportunities/opportunitySource";
 import {
   createAdminSupabaseClient,
   isSupabaseConfigured,
@@ -31,6 +37,8 @@ const querySchema = z.object({
   category: z.enum(OPPORTUNITY_CATEGORIES).optional(),
   countryGroup: z.enum(COUNTRY_GROUPS).default("all"),
   timeRange: z.enum(TIME_RANGES).default("near"),
+  today: z.enum(TODAY_FILTERS).default("all"),
+  source: z.enum(OPPORTUNITY_SOURCES).default("all"),
   q: z.string().trim().max(100).optional(),
 });
 
@@ -67,17 +75,37 @@ function prepareResponse(
   rows: Opportunity[],
   options: z.infer<typeof querySchema>,
   source: "supabase" | "fallback",
-  lastUpdated: string | null,
+  lastScanAt: string | null,
 ) {
-  const { limit, page, category, countryGroup, timeRange, q } = options;
+  const {
+    limit,
+    page,
+    category,
+    countryGroup,
+    timeRange,
+    today,
+    source: sourceFilter,
+    q,
+  } = options;
   const offset = (page - 1) * limit;
   const now = new Date();
 
   const scopedRows = rows
     .map(sanitizeNasaSbirOpportunityDates)
     .filter((item) => matchesCountryGroup(item.location, countryGroup))
-    .filter((item) => matchesTimeRange(item, timeRange, now))
+    .filter(
+      (item) => today !== "all" || matchesTimeRange(item, timeRange, now),
+    )
+    .filter((item) => matchesTodayFilter(item, today, now))
+    .filter((item) => matchesOpportunitySource(item, sourceFilter))
     .filter((item) => matchesOpportunitySearch(item, q));
+
+  const lastDataAddedAt =
+    rows
+      .map((item) => item.created_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
 
   const categoryCounts = Object.fromEntries(
     OPPORTUNITY_CATEGORIES.map((itemCategory) => [
@@ -107,11 +135,15 @@ function prepareResponse(
       count: filteredRows.length,
       total: scopedRows.length,
       categoryCounts,
-      lastUpdated,
+      lastUpdated: lastDataAddedAt,
+      lastDataAddedAt,
+      lastScanAt,
       page,
       limit,
       hasMore: offset + data.length < filteredRows.length,
       timeRange,
+      today,
+      sourceFilter,
       query: q ?? "",
     },
   });
@@ -134,13 +166,14 @@ export async function GET(request: NextRequest) {
       const supabase = createAdminSupabaseClient();
       const [
         rows,
-        { data: latestRows, error: latestError },
+        { data: latestRun, error: latestError },
       ] = await Promise.all([
         getAllOpportunityRows(),
         supabase
-          .from("opportunities")
-          .select("fetched_at")
-          .order("fetched_at", { ascending: false })
+          .from("ingestion_runs")
+          .select("finished_at")
+          .in("status", ["success", "partial"])
+          .order("finished_at", { ascending: false, nullsFirst: false })
           .limit(1),
       ]);
 
@@ -150,7 +183,7 @@ export async function GET(request: NextRequest) {
         rows,
         parsed.data,
         "supabase",
-        latestRows?.[0]?.fetched_at ?? null,
+        latestRun?.[0]?.finished_at ?? null,
       );
     } catch (error) {
       console.error("Supabase opportunities query failed:", error);
@@ -161,6 +194,6 @@ export async function GET(request: NextRequest) {
     fallbackOpportunities,
     parsed.data,
     "fallback",
-    fallbackOpportunities[0]?.fetched_at ?? null,
+    null,
   );
 }
