@@ -1,9 +1,16 @@
+"use client";
+
 import dayjs from "dayjs";
+import { useId, useState } from "react";
 
 import { OpportunityImage } from "@/components/OpportunityImage";
+import {
+  buildTurkishExplanation,
+  getOriginalSummaryForCard,
+  shouldShowTurkishExplanationButton,
+} from "@/lib/opportunities/opportunityDisplayText";
 import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
 import { getOpportunityStatus } from "@/lib/opportunities/opportunityFilters";
-import { cleanOpportunitySummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import {
   chooseOpportunityUrl,
   getOpportunityLinkLabel,
@@ -26,12 +33,16 @@ const statusColors = {
 } as const;
 
 export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
+  const [showTurkishExplanation, setShowTurkishExplanation] = useState(false);
+  const explanationId = useId();
   const dateDisplay = getOpportunityDateDisplay(opportunity);
   const status = getOpportunityStatus(opportunity);
-  const summary = cleanOpportunitySummary(
-    opportunity.summary,
-    opportunity.title,
-  );
+  const originalSummary = getOriginalSummaryForCard(opportunity);
+  const showExplanationButton =
+    shouldShowTurkishExplanationButton(opportunity);
+  const turkishExplanation = showExplanationButton
+    ? buildTurkishExplanation(opportunity)
+    : null;
   const link = chooseOpportunityUrl(
     [opportunity.application_url, opportunity.source_url],
     opportunity.source_url,
@@ -78,10 +89,34 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
         <h3 className="atlas-text text-lg font-semibold leading-7 tracking-[-0.02em]">
           {opportunity.title}
         </h3>
-        {summary && (
-          <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
-            {summary}
-          </p>
+        <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
+          {originalSummary}
+        </p>
+        {showExplanationButton && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowTurkishExplanation((current) => !current)}
+              aria-expanded={showTurkishExplanation}
+              aria-controls={explanationId}
+              className="atlas-control rounded-full px-3 py-2 text-[11px] font-semibold transition hover:border-[var(--atlas-border-hover)] hover:text-[var(--atlas-text)]"
+            >
+              {showTurkishExplanation
+                ? "Türkçe açıklamayı gizle"
+                : "Türkçe açıklama"}
+            </button>
+            {showTurkishExplanation && turkishExplanation && (
+              <div
+                id={explanationId}
+                className="atlas-text mt-3 rounded-xl border border-[var(--atlas-border)] bg-[var(--atlas-surface)] px-3 py-3 text-xs leading-5"
+              >
+                <p className="atlas-muted mb-1 text-[9px] font-bold uppercase tracking-[0.12em]">
+                  Türkçe kısa açıklama
+                </p>
+                {turkishExplanation}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
