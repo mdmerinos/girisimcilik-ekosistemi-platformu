@@ -26,6 +26,19 @@ PAGE_URLS = [
     "https://www.diana.nato.int/connect/page/3.html",
     "https://www.diana.nato.int/connect/page/4.html",
 ]
+FALLBACK_URLS = [
+    "https://www.diana.nato.int/challenges.html",
+    "https://www.diana.nato.int/accelerator-programme.html",
+    (
+        "https://www.diana.nato.int/connect/"
+        "nato-diana-unveils-six-new-challenges-to-tackle-evolving-"
+        "defence-and-security-needs.html"
+    ),
+    (
+        "https://www.diana.nato.int/challenges/"
+        "decision-superiority-for-nato-warfighters.html"
+    ),
+]
 DETAIL_PATH = re.compile(r"^/connect/(?!page/)[^/]+\.html$", re.IGNORECASE)
 RELEVANT_PATTERN = re.compile(
     r"\b(challenge|accelerator|programme|program|funding|grant|application|"
@@ -52,9 +65,20 @@ DATE_PATTERN = re.compile(
     r"Dec(?:ember)?)\s+\d{1,2},\s*\d{4}\b",
     re.IGNORECASE,
 )
+DAY_FIRST_DATE_PATTERN = re.compile(
+    r"\b(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+)?"
+    r"\d{1,2}\s+(?:January|February|March|April|May|June|July|August|"
+    r"September|October|November|December)\s+\d{4}\b",
+    re.IGNORECASE,
+)
 DEADLINE_PATTERN = re.compile(
-    r"(?:deadline|applications? close|apply by)\s*:?\s*"
-    r"((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"(?:deadline|applications? close|apply by|submissions? close|"
+    r"closes?(?: on)?|open until|"
+    r"applications?[^.\n]{0,180}?(?:until|close on))\s*:?\s*"
+    r"((?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+)?"
+    r"\d{1,2}\s+(?:January|February|March|April|May|June|July|August|"
+    r"September|October|November|December)\s+\d{4}|"
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
     r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|"
     r"Dec(?:ember)?)\s+\d{1,2},\s*\d{4})",
     re.IGNORECASE,
@@ -64,6 +88,10 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 MAX_ITEMS = 40
+
+
+class PageBlockedError(RuntimeError):
+    """The public source returned an access-block page."""
 
 
 def write_summary(message: str) -> None:
@@ -98,7 +126,7 @@ def wait_for_public_page(driver: webdriver.Chrome, url: str) -> str:
     html = driver.page_source
     title = driver.title or ""
     if BLOCKED_PATTERN.search(f"{title} {html[:8000]}"):
-        raise RuntimeError(f"Public page access was blocked: {url}")
+        raise PageBlockedError(f"Public page access was blocked: {url}")
     return html
 
 
@@ -115,7 +143,12 @@ def parse_date(value: str | None) -> str | None:
         return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     except ValueError:
         pass
-    for date_format in ("%b %d, %Y", "%B %d, %Y"):
+    for date_format in (
+        "%b %d, %Y",
+        "%B %d, %Y",
+        "%A %d %B %Y",
+        "%d %B %Y",
+    ):
         try:
             parsed = datetime.strptime(cleaned, date_format)
             return parsed.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
@@ -143,10 +176,12 @@ def json_ld_dates(soup: BeautifulSoup) -> tuple[str | None, str | None]:
     return None, None
 
 
-def collect_listing_items(driver: webdriver.Chrome) -> list[dict[str, str | None]]:
+def collect_listing_items(
+    driver: webdriver.Chrome, load_page=wait_for_public_page
+) -> list[dict[str, str | None]]:
     items: dict[str, dict[str, str | None]] = {}
     for page_url in PAGE_URLS:
-        html = wait_for_public_page(driver, page_url)
+        html = load_page(driver, page_url)
         soup = BeautifulSoup(html, "html.parser")
         page_count = 0
         for anchor in soup.select("main a[href], article a[href], a[href^='/connect/']"):
@@ -189,10 +224,12 @@ def extract_application_url(main: BeautifulSoup, detail_url: str) -> str:
 
 
 def enrich_item(
-    driver: webdriver.Chrome, item: dict[str, str | None]
+    driver: webdriver.Chrome,
+    item: dict[str, str | None],
+    load_page=wait_for_public_page,
 ) -> dict | None:
     detail_url = str(item["url"])
-    html = wait_for_public_page(driver, detail_url)
+    html = load_page(driver, detail_url)
     soup = BeautifulSoup(html, "html.parser")
     main = soup.select_one("main article, main, article") or soup
     heading = main.select_one("h1")
@@ -268,6 +305,129 @@ def enrich_item(
     }
 
 
+def parse_fallback_page(url: str, html: str) -> dict | None:
+    """Build one opportunity only from content present on an official page."""
+    soup = BeautifulSoup(html, "html.parser")
+    main = soup.select_one("main article, main, article") or soup
+    heading = main.select_one("h1")
+    title = (
+        " ".join(heading.get_text(" ", strip=True).split())
+        if heading
+        else " ".join((soup.title.get_text(" ", strip=True) if soup.title else "").split())
+    )
+
+    description_meta = (
+        soup.select_one("meta[name='description']")
+        or soup.select_one("meta[property='og:description']")
+        or soup.select_one("meta[name='twitter:description']")
+    )
+    summary_parts: list[str] = []
+    if description_meta and description_meta.get("content"):
+        summary_parts.append(" ".join(description_meta.get("content", "").split()))
+    for paragraph in main.select("p"):
+        text = " ".join(paragraph.get_text(" ", strip=True).split())
+        if len(text) >= 35 and text not in summary_parts:
+            summary_parts.append(text)
+        if len(" ".join(summary_parts)) >= 3500:
+            break
+    summary = " ".join(summary_parts).strip()[:4500]
+    searchable = f"{title} {summary}"
+    if len(title) < 5 or not RELEVANT_PATTERN.search(searchable):
+        return None
+
+    json_published, json_deadline = json_ld_dates(soup)
+    published_at = json_published
+    time_element = main.select_one("time[datetime]")
+    if not published_at and time_element:
+        published_at = parse_date(time_element.get("datetime"))
+    if not published_at:
+        published_meta = soup.select_one("meta[property='article:published_time']")
+        published_at = (
+            parse_date(published_meta.get("content")) if published_meta else None
+        )
+    # A visible date on a NATO connect news detail is its publication date.
+    if not published_at and "/connect/" in url:
+        visible_date = DATE_PATTERN.search(main.get_text(" ", strip=True))
+        published_at = parse_date(visible_date.group(0)) if visible_date else None
+
+    text = " ".join(main.get_text(" ", strip=True).split())
+    deadline_at = json_deadline
+    if not deadline_at:
+        deadline_match = DEADLINE_PATTERN.search(text)
+        deadline_at = parse_date(deadline_match.group(1)) if deadline_match else None
+
+    if FUNDING_PATTERN.search(searchable) or "/challenges" in url:
+        category = "Uluslararası Fonlar"
+    elif PROGRAM_PATTERN.search(searchable):
+        category = "Etkinlik ve Programlar"
+    else:
+        category = "Haber ve Sosyal Medya Akışı"
+
+    image_meta = soup.select_one("meta[property='og:image']") or soup.select_one(
+        "meta[name='twitter:image']"
+    )
+    image_url = (
+        urljoin(url, image_meta.get("content", ""))
+        if image_meta and image_meta.get("content")
+        else None
+    )
+
+    return {
+        "title": title,
+        "summary": summary or None,
+        "category": category,
+        "sourceUrl": url,
+        "applicationUrl": extract_application_url(main, url),
+        "imageUrl": image_url,
+        "publishedAt": published_at,
+        "deadlineAt": deadline_at,
+        "location": "Global",
+        "countryGroup": "global",
+    }
+
+
+def collect_fallback_items(
+    driver: webdriver.Chrome, load_page=wait_for_public_page
+) -> list[dict]:
+    results: dict[str, dict] = {}
+    for fallback_url in FALLBACK_URLS:
+        try:
+            html = load_page(driver, fallback_url)
+        except PageBlockedError:
+            print(f"Fallback page blocked, skipping: {fallback_url}")
+            continue
+        item = parse_fallback_page(fallback_url, html)
+        if item:
+            results[fallback_url] = item
+    return list(results.values())
+
+
+def collect_opportunities(
+    driver: webdriver.Chrome, load_page=wait_for_public_page
+) -> list[dict]:
+    try:
+        listing_items = collect_listing_items(driver, load_page)
+    except PageBlockedError:
+        print("connect.html blocked, using fallback pages")
+        return collect_fallback_items(driver, load_page)
+
+    opportunities: list[dict] = []
+    for item in listing_items:
+        try:
+            opportunity = enrich_item(driver, item, load_page)
+        except PageBlockedError:
+            print(f"Detail page blocked, skipping: {item['url']}")
+            continue
+        if opportunity:
+            opportunities.append(opportunity)
+
+    if opportunities:
+        return opportunities
+
+    print("connect.html returned no usable records, using fallback pages")
+    return collect_fallback_items(driver, load_page)
+
+
 def post_items(items: list[dict]) -> dict:
     endpoint = os.environ.get("WORKER_INGESTION_URL")
     secret = os.environ.get("WORKER_INGESTION_SECRET")
@@ -300,12 +460,7 @@ def main() -> int:
     driver: webdriver.Chrome | None = None
     try:
         driver = build_driver()
-        listing_items = collect_listing_items(driver)
-        opportunities = [
-            opportunity
-            for item in listing_items
-            if (opportunity := enrich_item(driver, item)) is not None
-        ]
+        opportunities = collect_opportunities(driver)
         result = post_items(opportunities)
         endpoint_result = result.get("result", {})
         message = (
