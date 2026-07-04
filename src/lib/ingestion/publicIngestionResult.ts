@@ -59,7 +59,9 @@ export function toPublicIngestionResult(
       inserted: source.inserted,
       updated: source.updated,
       error: publicSourceMessage(source),
-      workerRequired: source.sourceId === "nato-diana",
+      workerRequired: ["nato-diana", "odtu-teknokent"].includes(
+        source.sourceId,
+      ),
     })),
     totals: {
       ...result.totals,

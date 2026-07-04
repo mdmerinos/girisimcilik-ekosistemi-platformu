@@ -42,6 +42,11 @@ type ApiResponse = {
     timeRange: TimeRange;
     today: TodayFilter;
     sourceFilter: OpportunitySource;
+    sourceWorkerStatus: {
+      status: string;
+      message: string | null;
+      lastRunAt: string | null;
+    } | null;
     query: string;
   };
 };
@@ -347,8 +352,16 @@ export function OpportunityDashboard() {
                 </p>
                 {source === "nato-diana" && (
                   <p className="atlas-muted mt-2 text-xs">
-                    NATO DIANA bot koruması nedeniyle normal fetch ile 403
-                    döndürebiliyor. Harici worker ayarı gerekiyor.
+                    {meta?.sourceWorkerStatus?.status === "empty"
+                      ? "NATO DIANA worker çalıştı ama uygun kayıt bulunamadı."
+                      : "NATO DIANA worker kurulmuş durumda; GitHub WORKER_INGESTION_URL/WORKER_INGESTION_SECRET ve Vercel BOT_INGESTION_SECRET ayarları yapılmadan çalışmaz."}
+                  </p>
+                )}
+                {source === "odtu-teknokent" && (
+                  <p className="atlas-muted mt-2 text-xs">
+                    {meta?.sourceWorkerStatus?.status === "empty"
+                      ? "ODTÜ Teknokent worker çalıştı ama uygun kayıt bulunamadı."
+                      : "ODTÜ Teknokent normal scraper ve GitHub Actions browser worker ile desteklenir. Worker secretları ayarlanıp workflow çalıştırıldığında uygun kayıtlar burada görünür."}
                   </p>
                 )}
               </div>

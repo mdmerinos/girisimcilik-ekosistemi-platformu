@@ -58,6 +58,20 @@ const STRONG_KEYWORDS = [
   "sosyal girişim",
   "sosyal girisim",
   "horizon europe",
+  "angel investment",
+  "melek yatırım",
+  "melek yatirim",
+  "tech transfer",
+  "technology transfer",
+  "teknoloji transferi",
+  "commercialization",
+  "ticarileştirme",
+  "ticarilestirme",
+  "innovation ecosystem",
+  "inovasyon ekosistemi",
+  "technology startup",
+  "teknoloji girişimi",
+  "teknoloji girisimi",
 ] as const;
 
 const OPPORTUNITY_KEYWORDS = [
@@ -128,6 +142,12 @@ export function isEntrepreneurshipRelevant(
   );
   const investmentSignal = hasStrictInvestmentSignal(input);
   const strongKeyword = findKeyword(content, STRONG_KEYWORDS);
+  const trustedWorkerSource = /(?:odtu-teknokent|nato-diana)/.test(context);
+  const trustedTechnologySignal =
+    trustedWorkerSource &&
+    /\b(?:teknoloji|technology|deep tech|innovation|inovasyon|challenge|program|programme|commercialization|ticarileştirme|ticarilestirme)\b/i.test(
+      content,
+    );
   const excluded = EXCLUSION_PATTERNS.find((pattern) => pattern.test(content));
   const generalFinance = GENERAL_FINANCE_PATTERNS.find((pattern) =>
     pattern.test(content),
@@ -158,6 +178,13 @@ export function isEntrepreneurshipRelevant(
     return {
       relevant: true,
       reason: `Girişimcilik anahtar kelimesi eşleşti: ${strongKeyword}`,
+    };
+  }
+
+  if (trustedTechnologySignal) {
+    return {
+      relevant: true,
+      reason: "Güvenilir worker kaynağında teknoloji veya program sinyali eşleşti.",
     };
   }
 

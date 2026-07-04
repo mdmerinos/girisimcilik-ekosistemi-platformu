@@ -1,12 +1,12 @@
-# NATO DIANA External Worker
+# ODTÜ Teknokent External Worker
 
-Bu worker, NATO DIANA'nın herkese açık `connect` sayfalarını GitHub Actions
-üzerinde headless Chrome ile açar. Gerçek detay bağlantılarını bulur; başlık,
-özet, detay/başvuru URL'si ve yalnız güvenilir biçimde bulunan tarihleri
-çıkarır. Sonucu `sourceSlug=nato-diana` ile güvenli worker endpointine yollar.
+Bu worker, ODTÜ Teknokent'in resmi ana sayfasındaki gerçek haber, program ve
+başvuru kartlarını GitHub Actions üzerinde headless Chrome ile okur. Carousel
+tekrarlarını URL ile temizler; gerçek başlık, özet, detay/başvuru URL'si ve
+yalnız kaynakta bulunan tarihleri çıkarır. Sonucu
+`sourceSlug=odtu-teknokent` ile güvenli worker endpointine yollar.
 
 Ana Next.js/Vercel uygulamasına Selenium veya Chrome bağımlılığı eklemez.
-CAPTCHA, proxy rotation, stealth veya fingerprint bypass uygulamaz.
 
 ## Gerekli repository secrets
 
@@ -20,13 +20,13 @@ Gerçek secret değeri hiçbir dosyaya yazılmamalıdır.
 ## Manuel çalıştırma
 
 1. GitHub repository içinde **Actions** sekmesine gir.
-2. **NATO DIANA Worker** workflow'unu seç.
+2. **ODTÜ Teknokent Worker** workflow'unu seç.
 3. **Run workflow** düğmesine bas.
 4. Log ve step summary içinde collected/inserted/updated sayılarını kontrol et.
 5. Canlı API'yi kontrol et:
 
 ```text
-/api/opportunities?source=nato-diana&timeRange=all&limit=10
+/api/opportunities?source=odtu-teknokent&timeRange=all&limit=10
 ```
 
 ## Yerel çalıştırma
@@ -35,5 +35,5 @@ Python 3.12 ve Google Chrome gerekir:
 
 ```bash
 python -m pip install -r requirements.txt
-python nato_diana_worker.py
+python odtu_teknokent_worker.py
 ```

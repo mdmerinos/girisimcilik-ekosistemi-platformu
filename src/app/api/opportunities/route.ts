@@ -76,6 +76,11 @@ function prepareResponse(
   options: z.infer<typeof querySchema>,
   source: "supabase" | "fallback",
   lastScanAt: string | null,
+  sourceWorkerStatus: {
+    status: string;
+    message: string | null;
+    lastRunAt: string | null;
+  } | null,
 ) {
   const {
     limit,
@@ -144,6 +149,7 @@ function prepareResponse(
       timeRange,
       today,
       sourceFilter,
+      sourceWorkerStatus,
       query: q ?? "",
     },
   });
@@ -167,6 +173,7 @@ export async function GET(request: NextRequest) {
       const [
         rows,
         { data: latestRun, error: latestError },
+        { data: workerLog, error: workerLogError },
       ] = await Promise.all([
         getAllOpportunityRows(),
         supabase
@@ -175,15 +182,35 @@ export async function GET(request: NextRequest) {
           .in("status", ["success", "partial"])
           .order("finished_at", { ascending: false, nullsFirst: false })
           .limit(1),
+        ["nato-diana", "odtu-teknokent"].includes(parsed.data.source)
+          ? supabase
+              .from("ingestion_logs")
+              .select("status,error_message,finished_at,created_at")
+              .eq("source_id", parsed.data.source)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (latestError) throw latestError;
+      if (workerLogError) throw workerLogError;
 
       return prepareResponse(
         rows,
         parsed.data,
         "supabase",
         latestRun?.[0]?.finished_at ?? null,
+        workerLog
+          ? {
+              status: workerLog.status as string,
+              message: (workerLog.error_message as string | null) ?? null,
+              lastRunAt:
+                (workerLog.finished_at as string | null) ??
+                (workerLog.created_at as string | null) ??
+                null,
+            }
+          : null,
       );
     } catch (error) {
       console.error("Supabase opportunities query failed:", error);
@@ -194,6 +221,7 @@ export async function GET(request: NextRequest) {
     fallbackOpportunities,
     parsed.data,
     "fallback",
+    null,
     null,
   );
 }

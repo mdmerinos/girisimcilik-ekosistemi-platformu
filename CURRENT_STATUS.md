@@ -181,3 +181,41 @@ Sandbox dış ağa erişemediği için yerel smoke test fallback kaynağı üzer
 - Mevcut 40+ RSS/API/HTML kaynak kataloğu incelendi; doğrulanmamış yeni kaynak
   veya sahte veri eklenmedi.
 - Kontroller: typecheck başarılı, lint başarılı, testler 58/58, build başarılı.
+
+## 4 Temmuz 2026 — NATO ve ODTÜ production workerları
+
+- `/api/worker/opportunities` artık zorunlu ve allowlist kontrollü
+  `sourceSlug` kabul eder: `nato-diana`, `odtu-teknokent`.
+- Worker payload'ı kanonik kaynak adı ve kaynağa ait gerçek URL hostu ile
+  doğrulanır. Kaynak adı item tarafından değiştirilemez.
+- Worker ve normal scraper aynı kanonik kaynak adı + URL unique key'ini
+  kullandığı için iki kanaldan gelen aynı kayıt çoğalmaz.
+- Worker POST sonucu mevcut ingestion run/log tablolarına source slug ile
+  yazılır. Sıfır kayıt çalışması `empty` olarak izlenebilir.
+- NATO worker gerçek public `connect` sayfalarını headless Chrome ile açar;
+  detay/başvuru URL'si, özet, güvenilir yayın/deadline ve kategori çıkarır.
+- ODTÜ worker resmi ana sayfadaki gerçek haber/program/başvuru kartlarını
+  headless Chrome ile açar; URL tekrarlarını temizler ve tarih uydurmaz.
+- İki worker da günlük schedule ve `workflow_dispatch` ile çalışabilir.
+- Ana Next.js `package.json` dosyasına browser bağımlılığı eklenmedi.
+
+Gerekli GitHub repository secrets:
+
+```text
+WORKER_INGESTION_URL=https://girisimcilik-ekosistemi-platformu.vercel.app/api/worker/opportunities
+WORKER_INGESTION_SECRET=Vercel BOT_INGESTION_SECRET ile aynı değer
+```
+
+NATO manuel çalıştırma:
+
+1. GitHub → Actions → NATO DIANA Worker.
+2. Run workflow.
+3. Step summary içinde collected/inserted/updated sayılarını kontrol et.
+4. `/api/opportunities?source=nato-diana&timeRange=all&limit=10` aç.
+
+ODTÜ manuel çalıştırma:
+
+1. GitHub → Actions → ODTÜ Teknokent Worker.
+2. Run workflow.
+3. Step summary içinde collected/inserted/updated sayılarını kontrol et.
+4. `/api/opportunities?source=odtu-teknokent&timeRange=all&limit=10` aç.

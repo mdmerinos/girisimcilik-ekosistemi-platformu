@@ -76,6 +76,11 @@ export function RefreshStatus({ state }: { state: RefreshState | null }) {
             </span>
             <span>{state.result.totals.issueSources} sorunlu/boş kaynak</span>
           </div>
+          <p className="atlas-muted mt-3 text-xs leading-5">
+            NATO DIANA ve ODTÜ browser worker’ları GitHub Actions üzerinde
+            çalışır. Manuel workflow tamamlandıktan sonra gelen kayıtlar kaynak
+            filtrelerinde görünür.
+          </p>
           <details className="mt-4">
             <summary className="cursor-pointer text-xs font-semibold">
               Kaynak bazlı yenileme raporu

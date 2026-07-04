@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -107,6 +108,9 @@ test("entrepreneurship relevance accepts ecosystem opportunities", () => {
     "Startup funding round",
     "Accelerator application deadline",
     "TÜBİTAK Ar-Ge ve inovasyon destek çağrısı",
+    "Technology transfer and commercialization programme",
+    "Angel investment network backs deep tech founders",
+    "İnovasyon ekosistemi ve teknoloji ticarileştirme programı",
   ]) {
     assert.equal(
       isEntrepreneurshipRelevant({
@@ -127,6 +131,8 @@ test("entrepreneurship relevance rejects unrelated announcements", () => {
     "Spor etkinliği duyurusu",
     "Teknik bakım çalışması",
     "Genel kurum duyurusu",
+    "Kültür sanat festivali programı",
+    "Diplomatik heyetler arası genel siyasi görüşme",
   ]) {
     const result = isEntrepreneurshipRelevant({
       title,
@@ -491,9 +497,24 @@ test("worker authorization rejects wrong secrets and accepts configured bearer",
   );
 });
 
-test("worker payload requires a non-empty items array", () => {
+test("worker payload requires an allowed sourceSlug and accepts zero-item reports", () => {
   assert.equal(workerEnvelopeSchema.safeParse({}).success, false);
-  assert.equal(workerEnvelopeSchema.safeParse({ items: [] }).success, false);
+  assert.equal(
+    workerEnvelopeSchema.safeParse({
+      sourceSlug: "nato-diana",
+      sourceName: "NATO DIANA",
+      items: [],
+    }).success,
+    true,
+  );
+  assert.equal(
+    workerEnvelopeSchema.safeParse({
+      sourceSlug: "odtu-teknokent",
+      sourceName: "ODTÜ Teknokent",
+      items: [],
+    }).success,
+    true,
+  );
 });
 
 test("worker records are normalized, filtered and deduplicated before upsert", async () => {
@@ -502,15 +523,17 @@ test("worker records are normalized, filtered and deduplicated before upsert", a
     title: "NATO DIANA startup accelerator challenge call",
     summary: "Innovators can apply to the public accelerator programme.",
     category: "Uluslararası Fonlar",
-    source_name: "NATO DIANA",
-    source_url: "https://www.diana.nato.int/connect/challenge-call.html",
-    application_url:
+    sourceUrl: "https://www.diana.nato.int/connect/challenge-call.html",
+    applicationUrl:
       "https://www.diana.nato.int/connect/challenge-call.html",
-    published_at: "2026-07-03T00:00:00.000Z",
+    publishedAt: "2026-07-03T00:00:00.000Z",
     location: "Global",
   };
   const result = await processWorkerOpportunities(
-    [
+    {
+      sourceSlug: "nato-diana",
+      sourceName: "NATO DIANA",
+      items: [
       validItem,
       validItem,
       { title: "Eksik URL" },
@@ -518,11 +541,12 @@ test("worker records are normalized, filtered and deduplicated before upsert", a
         ...validItem,
         title: "Genel kurum duyurusu",
         summary: null,
-        source_url: "https://www.diana.nato.int/connect/general-notice.html",
-        application_url:
+        sourceUrl: "https://www.diana.nato.int/connect/general-notice.html",
+        applicationUrl:
           "https://www.diana.nato.int/connect/general-notice.html",
       },
-    ],
+      ],
+    },
     {
       now: () => new Date("2026-07-03T12:00:00.000Z"),
       upsert: async (items) => {
@@ -538,4 +562,89 @@ test("worker records are normalized, filtered and deduplicated before upsert", a
   assert.equal(result.rejected, 1);
   assert.equal(result.skipped, 1);
   assert.equal(upserted.length, 1);
+});
+
+test("ODTÜ worker uses canonical identity and never invents dates", async () => {
+  const upserted: unknown[] = [];
+  const result = await processWorkerOpportunities(
+    {
+      sourceSlug: "odtu-teknokent",
+      sourceName: "ODTÜ Teknokent",
+      items: [
+        {
+          title: "ODTÜ Teknokent teknoloji girişimcilik programı",
+          summary: "Teknoloji girişimleri için kuluçka ve mentorluk programı.",
+          category: "Etkinlik ve Programlar",
+          sourceUrl:
+            "https://www.odtuteknokent.com.tr/tr/duyuru/girisimcilik-programi",
+          applicationUrl:
+            "https://portal.odtuteknokent.com.tr/basvuru/girisimcilik",
+          publishedAt: null,
+          deadlineAt: null,
+          location: "Türkiye",
+          countryGroup: "turkiye",
+        },
+      ],
+    },
+    {
+      now: () => new Date("2026-07-04T12:00:00.000Z"),
+      upsert: async (items) => {
+        upserted.push(...items);
+        return { inserted: items.length, updated: 0 };
+      },
+    },
+  );
+
+  assert.equal(result.accepted, 1);
+  assert.equal(result.sourceSlug, "odtu-teknokent");
+  assert.equal(
+    (upserted[0] as { source_name: string }).source_name,
+    "ODTÜ Teknokent",
+  );
+  assert.equal((upserted[0] as { published_at: null }).published_at, null);
+  assert.equal((upserted[0] as { deadline_at: null }).deadline_at, null);
+});
+
+test("worker source ownership rejects a URL from another host", async () => {
+  const result = await processWorkerOpportunities(
+    {
+      sourceSlug: "nato-diana",
+      sourceName: "NATO DIANA",
+      items: [
+        {
+          title: "NATO DIANA startup challenge",
+          summary: "Deep tech accelerator programme.",
+          category: "Uluslararası Fonlar",
+          sourceUrl: "https://example.com/spoofed",
+        },
+      ],
+    },
+    {
+      upsert: async () => ({ inserted: 0, updated: 0 }),
+    },
+  );
+
+  assert.equal(result.accepted, 0);
+  assert.equal(result.rejected, 1);
+});
+
+test("browser worker workflows exist without Next.js browser dependencies", () => {
+  for (const path of [
+    ".github/workflows/nato-diana-worker.yml",
+    ".github/workflows/odtu-teknokent-worker.yml",
+    "workers/nato-diana/nato_diana_worker.py",
+    "workers/odtu-teknokent/odtu_teknokent_worker.py",
+  ]) {
+    assert.equal(existsSync(path), true, path);
+  }
+
+  const packageJson = readFileSync("package.json", "utf8").toLocaleLowerCase();
+  for (const dependency of [
+    "selenium",
+    "playwright",
+    "puppeteer",
+    "chromedriver",
+  ]) {
+    assert.equal(packageJson.includes(`"${dependency}"`), false, dependency);
+  }
 });

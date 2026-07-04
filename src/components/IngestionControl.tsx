@@ -433,7 +433,7 @@ export function IngestionControl() {
                       </code>
                     </td>
                     <td className="px-3 py-3">
-                      {source.id === "nato-diana"
+                      {["nato-diana", "odtu-teknokent"].includes(source.id)
                         ? "Normal fetch + worker"
                         : `Normal ${source.kind.toUpperCase()}`}
                     </td>
@@ -485,8 +485,8 @@ export function IngestionControl() {
                     </td>
                     <td className="max-w-xs px-3 py-3 text-[#78684a]">
                       {latestLog?.error_message ??
-                        (source.id === "nato-diana"
-                          ? "Bot korumasında harici worker gerekir."
+                        (["nato-diana", "odtu-teknokent"].includes(source.id)
+                          ? "GitHub Actions browser worker kuruludur; repository secretları gerekir."
                           : "—")}
                     </td>
                   </tr>
