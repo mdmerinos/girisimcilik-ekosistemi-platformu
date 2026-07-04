@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { OpportunityImage } from "@/components/OpportunityImage";
 import {
   buildTurkishExplanation,
-  getOriginalSummaryForCard,
+  getCardSummaryDisplay,
   shouldShowTurkishExplanationButton,
 } from "@/lib/opportunities/opportunityDisplayText";
 import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
@@ -37,7 +37,7 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
   const explanationId = useId();
   const dateDisplay = getOpportunityDateDisplay(opportunity);
   const status = getOpportunityStatus(opportunity);
-  const originalSummary = getOriginalSummaryForCard(opportunity);
+  const summaryDisplay = getCardSummaryDisplay(opportunity);
   const showExplanationButton =
     shouldShowTurkishExplanationButton(opportunity);
   const turkishExplanation = showExplanationButton
@@ -90,7 +90,7 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
           {opportunity.title}
         </h3>
         <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
-          {originalSummary}
+          {summaryDisplay.text}
         </p>
         {showExplanationButton && (
           <div className="mt-3">

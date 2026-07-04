@@ -3,9 +3,6 @@ import dayjs from "dayjs";
 import { extractCleanSummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import type { Opportunity } from "@/types/opportunity";
 
-export const MISSING_MEANINGFUL_SUMMARY =
-  "Kaynakta anlamlı kısa açıklama bulunamadı.";
-
 type DisplayOpportunity = Pick<
   Opportunity,
   "title" | "summary" | "source_name" | "category" | "deadline_at"
@@ -149,7 +146,7 @@ export function isBadSummary(
 
 export function getOriginalSummaryForCard(
   opportunity: DisplayOpportunity,
-): string {
+): string | null {
   if (
     isBadSummary(
       opportunity.summary,
@@ -157,13 +154,10 @@ export function getOriginalSummaryForCard(
       opportunity.source_name,
     )
   ) {
-    return MISSING_MEANINGFUL_SUMMARY;
+    return null;
   }
 
-  return (
-    extractCleanSummary(opportunity.summary, opportunity.title) ??
-    MISSING_MEANINGFUL_SUMMARY
-  );
+  return extractCleanSummary(opportunity.summary, opportunity.title);
 }
 
 function sourceExplanation(sourceName: string): string {
@@ -206,14 +200,23 @@ export function buildTurkishExplanation(
   return `${explanation} Son başvuru tarihi: ${deadline.format("DD.MM.YYYY")}.`;
 }
 
+export function getCardSummaryDisplay(
+  opportunity: DisplayOpportunity,
+): { text: string; usesTurkishFallback: boolean } {
+  const originalSummary = getOriginalSummaryForCard(opportunity);
+  if (originalSummary) {
+    return { text: originalSummary, usesTurkishFallback: false };
+  }
+
+  return {
+    text: buildTurkishExplanation(opportunity),
+    usesTurkishFallback: true,
+  };
+}
+
 export function shouldShowTurkishExplanationButton(
   opportunity: DisplayOpportunity,
 ): boolean {
-  return (
-    isBadSummary(
-      opportunity.summary,
-      opportunity.title,
-      opportunity.source_name,
-    ) || isLikelyEnglish(opportunity.summary)
-  );
+  const originalSummary = getOriginalSummaryForCard(opportunity);
+  return Boolean(originalSummary && isLikelyEnglish(originalSummary));
 }

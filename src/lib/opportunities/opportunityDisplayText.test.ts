@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  MISSING_MEANINGFUL_SUMMARY,
   buildTurkishExplanation,
+  getCardSummaryDisplay,
   getOriginalSummaryForCard,
   isBadSummary,
   isLikelyEnglish,
@@ -54,16 +54,24 @@ test("Turkish summary is displayed without an unnecessary explanation button", (
   assert.equal(shouldShowTurkishExplanationButton(item), false);
 });
 
-test("posted boilerplate is replaced with the honest missing-summary message", () => {
+test("posted boilerplate displays Turkish fallback directly without a button", () => {
   const item = opportunity({
     source_name: "Grants.gov",
     summary: "DFOP001281 · Bureau Of Educational and Cultural Affairs · posted",
+    deadline_at: "2026-07-28T00:00:00.000Z",
   });
+  const display = getCardSummaryDisplay(item);
 
   assert.equal(isBadSummary(item.summary, item.title), true);
-  assert.equal(getOriginalSummaryForCard(item), MISSING_MEANINGFUL_SUMMARY);
-  assert.equal(shouldShowTurkishExplanationButton(item), true);
-  assert.match(buildTurkishExplanation(item), /^Bu kayıt, Grants\.gov/);
+  assert.equal(getOriginalSummaryForCard(item), null);
+  assert.equal(display.usesTurkishFallback, true);
+  assert.match(display.text, /^Bu kayıt, Grants\.gov/);
+  assert.match(display.text, /Son başvuru tarihi: 28\.07\.2026\.$/);
+  assert.doesNotMatch(
+    display.text,
+    /Kaynakta anlamlı kısa açıklama bulunamadı/,
+  );
+  assert.equal(shouldShowTurkishExplanationButton(item), false);
 });
 
 test("source-specific Turkish fallbacks remain factual", () => {
