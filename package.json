@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/utils/createUniqueKey.test.ts src/lib/ingestion/normalizeOpportunity.test.ts src/lib/ingestion/sourceConfig.test.ts src/lib/scrapers/scrapers.test.ts"
+    "test": "tsx --test src/lib/utils/createUniqueKey.test.ts src/lib/ingestion/normalizeOpportunity.test.ts src/lib/ingestion/sourceConfig.test.ts src/lib/opportunities/opportunityFilters.test.ts src/lib/scrapers/scrapers.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",

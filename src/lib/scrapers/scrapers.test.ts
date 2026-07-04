@@ -529,3 +529,49 @@ test("EU Funding structured 2027 deadlines remain unchanged", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("EU Funding keeps publication, opening and deadline fields distinct from fetch time", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        results: [
+          {
+            url: "https://ec.europa.eu/funding/publication-priority",
+            metadata: {
+              title: ["Startup innovation publication call"],
+              publicationDate: ["2026-05-01T00:00:00.000Z"],
+              openingDate: ["2026-06-01T00:00:00.000Z"],
+              deadlineDate: ["2026-10-01T00:00:00.000Z"],
+            },
+          },
+          {
+            url: "https://ec.europa.eu/funding/opening-fallback",
+            metadata: {
+              title: ["SME innovation opening call"],
+              openingDate: ["2026-08-01T00:00:00.000Z"],
+              deadlineDate: ["2027-01-15T00:00:00.000Z"],
+            },
+          },
+        ],
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+
+  try {
+    const items = await fetchEuFunding();
+    const publication = items.find((item) =>
+      item.source_url.includes("publication-priority"),
+    );
+    const opening = items.find((item) =>
+      item.source_url.includes("opening-fallback"),
+    );
+
+    assert.equal(publication?.published_at, "2026-05-01T00:00:00.000Z");
+    assert.equal(publication?.deadline_at, "2026-10-01T00:00:00.000Z");
+    assert.equal(opening?.published_at, "2026-08-01T00:00:00.000Z");
+    assert.notEqual(publication?.published_at, publication?.fetched_at);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

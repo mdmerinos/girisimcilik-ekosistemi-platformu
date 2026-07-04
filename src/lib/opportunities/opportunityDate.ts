@@ -1,7 +1,7 @@
 import type { Opportunity } from "@/types/opportunity";
 
 export type OpportunityDateDisplay = {
-  label: "Son başvuru" | "Yayın";
+  label: "Son başvuru" | "Açılış" | "Yayın";
   value: string;
 };
 

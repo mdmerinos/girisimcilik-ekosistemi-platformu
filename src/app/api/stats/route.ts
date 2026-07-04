@@ -14,13 +14,40 @@ export const dynamic = "force-dynamic";
 
 const unavailableStats: OpportunityStats = {
   total: 0,
+  totalCount: 0,
   addedToday: 0,
+  todayIngestedCount: 0,
+  todayPublishedCount: 0,
+  nearCount: 0,
+  activeCount: 0,
+  farFutureCount: 0,
+  expiredCount: 0,
+  noDateCount: 0,
   investmentNewsLast7Days: 0,
   upcomingEvents: 0,
   nationalSupports: 0,
   internationalFunds: 0,
   lastSuccessfulUpdate: null,
 };
+
+async function getAllOpportunityRows(): Promise<Opportunity[]> {
+  const supabase = createAdminSupabaseClient();
+  const batchSize = 1000;
+  const rows: Opportunity[] = [];
+
+  for (let offset = 0; ; offset += batchSize) {
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select("*")
+      .order("id", { ascending: true })
+      .range(offset, offset + batchSize - 1);
+
+    if (error) throw error;
+    const batch = (data ?? []) as Opportunity[];
+    rows.push(...batch);
+    if (batch.length < batchSize) return rows;
+  }
+}
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
@@ -33,10 +60,10 @@ export async function GET() {
   try {
     const supabase = createAdminSupabaseClient();
     const [
-      { data: opportunities, error: opportunitiesError },
+      opportunities,
       { data: latestRun, error: latestRunError },
     ] = await Promise.all([
-      supabase.from("opportunities").select("*").limit(5000),
+      getAllOpportunityRows(),
       supabase
         .from("ingestion_runs")
         .select("finished_at")
@@ -46,12 +73,11 @@ export async function GET() {
         .maybeSingle(),
     ]);
 
-    if (opportunitiesError) throw opportunitiesError;
     if (latestRunError) throw latestRunError;
 
     return NextResponse.json({
       data: calculateOpportunityStats(
-        (opportunities ?? []) as Opportunity[],
+        opportunities,
         new Date(),
         latestRun?.finished_at ?? null,
       ),

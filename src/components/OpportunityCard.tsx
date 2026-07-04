@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 
 import { OpportunityImage } from "@/components/OpportunityImage";
 import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
+import { getOpportunityStatus } from "@/lib/opportunities/opportunityFilters";
 import { cleanOpportunitySummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import {
   chooseOpportunityUrl,
@@ -17,8 +18,16 @@ const categoryColors: Record<Opportunity["category"], string> = {
   "Haber ve Sosyal Medya Akışı": "text-[#ff85ba] border-[#ff4d9d]/25",
 };
 
+const statusColors = {
+  "Başvuruya açık": "border-[#6bcb77]/30 text-[#6bcb77]",
+  "Gelecek çağrı": "border-[#00d9f5]/30 text-[#00d9f5]",
+  Kapandı: "border-[#ff6b6b]/30 text-[#ff8585]",
+  "Tarih belirsiz": "border-[var(--atlas-border)] atlas-muted",
+} as const;
+
 export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
   const dateDisplay = getOpportunityDateDisplay(opportunity);
+  const status = getOpportunityStatus(opportunity);
   const summary = cleanOpportunitySummary(
     opportunity.summary,
     opportunity.title,
@@ -35,12 +44,19 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
         src={opportunity.image_url}
         alt={`${opportunity.title} görseli`}
       />
-      <div className="flex items-start justify-between gap-4">
-        <span
-          className={`rounded-full border bg-transparent px-3 py-1 text-[10px] font-bold ${categoryColors[opportunity.category]}`}
-        >
-          {opportunity.category}
-        </span>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`rounded-full border bg-transparent px-3 py-1 text-[10px] font-bold ${categoryColors[opportunity.category]}`}
+          >
+            {opportunity.category}
+          </span>
+          <span
+            className={`rounded-full border bg-transparent px-2.5 py-1 text-[10px] font-semibold ${statusColors[status]}`}
+          >
+            {status}
+          </span>
+        </div>
         {opportunity.is_featured && (
           <span className="text-lg text-[#ffd93d]" title="Öne çıkan">
             ✦
@@ -63,14 +79,14 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--atlas-border)] pt-4">
         <div className="atlas-muted min-w-0 text-xs">
           {opportunity.location ?? "Online"}
-          {dateDisplay && (
-            <>
-              <span className="mx-2 opacity-40">·</span>
-              <span>
-                {dateDisplay.label}:{" "}
-                {dayjs(dateDisplay.value).format("DD.MM.YYYY")}
-              </span>
-            </>
+          <span className="mx-2 opacity-40">·</span>
+          {dateDisplay ? (
+            <span>
+              {dateDisplay.label}:{" "}
+              {dayjs(dateDisplay.value).format("DD.MM.YYYY")}
+            </span>
+          ) : (
+            <span>Tarih belirtilmemiş</span>
           )}
         </div>
         {link && linkLabel && (

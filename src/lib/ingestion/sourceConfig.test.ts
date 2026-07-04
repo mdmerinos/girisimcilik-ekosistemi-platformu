@@ -329,7 +329,15 @@ test("public opportunity stats use stored dates and categories", () => {
   );
 
   assert.equal(stats.total, 4);
+  assert.equal(stats.totalCount, 4);
   assert.equal(stats.addedToday, 4);
+  assert.equal(stats.todayIngestedCount, 4);
+  assert.equal(stats.todayPublishedCount, 0);
+  assert.equal(stats.nearCount, 4);
+  assert.equal(stats.activeCount, 4);
+  assert.equal(stats.farFutureCount, 0);
+  assert.equal(stats.expiredCount, 0);
+  assert.equal(stats.noDateCount, 0);
   assert.equal(stats.investmentNewsLast7Days, 1);
   assert.equal(stats.upcomingEvents, 1);
   assert.equal(stats.nationalSupports, 1);
@@ -361,6 +369,32 @@ test("opportunity dates clearly distinguish deadline and publication", () => {
     getOpportunityDateDisplay({ deadline_at: null, published_at: null }),
     null,
   );
+});
+
+test("today ingestion and publication counts never substitute for each other", () => {
+  const now = new Date("2026-07-03T12:00:00.000Z");
+  const base = {
+    id: "today-semantics",
+    unique_key: "today-semantics",
+    title: "Tarih semantiği",
+    summary: null,
+    category: "Ulusal Destek ve Fonlar" as const,
+    source_name: "Test",
+    source_url: "https://example.com/tarih",
+    application_url: null,
+    image_url: null,
+    published_at: "2026-07-01T09:00:00.000Z",
+    deadline_at: null,
+    fetched_at: "2026-07-03T09:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+    created_at: "2026-07-03T09:00:00.000Z",
+    updated_at: "2026-07-03T09:00:00.000Z",
+  };
+
+  const stats = calculateOpportunityStats([base], now);
+  assert.equal(stats.todayIngestedCount, 1);
+  assert.equal(stats.todayPublishedCount, 0);
 });
 
 test("worker authorization rejects wrong secrets and accepts configured bearer", () => {

@@ -11,7 +11,15 @@ type StatsResponse = {
 
 const EMPTY: OpportunityStats = {
   total: 0,
+  totalCount: 0,
   addedToday: 0,
+  todayIngestedCount: 0,
+  todayPublishedCount: 0,
+  nearCount: 0,
+  activeCount: 0,
+  farFutureCount: 0,
+  expiredCount: 0,
+  noDateCount: 0,
   investmentNewsLast7Days: 0,
   upcomingEvents: 0,
   nationalSupports: 0,
@@ -34,12 +42,12 @@ export function StatsCards() {
   }, []);
 
   const cards = [
-    ["Toplam fırsat", stats.total],
-    ["Bugün eklenen", stats.addedToday],
-    ["7 günlük yatırım", stats.investmentNewsLast7Days],
-    ["Yaklaşan etkinlik", stats.upcomingEvents],
-    ["Ulusal destek", stats.nationalSupports],
-    ["Uluslararası fon", stats.internationalFunds],
+    ["Yakın fırsatlar", stats.nearCount],
+    ["Tüm aktif fırsatlar", stats.activeCount],
+    ["Gelecek çağrılar", stats.farFutureCount],
+    ["Tarihi belirtilmemiş", stats.noDateCount],
+    ["Bugün sisteme eklenen", stats.todayIngestedCount],
+    ["Bugün yayımlanan", stats.todayPublishedCount],
     [
       "Son başarılı güncelleme",
       stats.lastSuccessfulUpdate

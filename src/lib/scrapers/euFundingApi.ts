@@ -40,7 +40,10 @@ const euResultSchema = z.object({
       objective: z.array(z.string()).optional(),
       topicDescription: z.array(z.string()).optional(),
       startDate: z.array(z.string()).optional(),
+      publicationDate: z.array(z.string()).optional(),
+      openingDate: z.array(z.string()).optional(),
       deadlineDate: z.array(z.string()).optional(),
+      status: z.array(z.string()).optional(),
     })
     .passthrough(),
 });
@@ -165,7 +168,11 @@ export async function fetchEuFunding(): Promise<OpportunityInput[]> {
           source_name: "EU Funding & Tenders",
           source_url: originalUrl,
           application_url: originalUrl,
-          published_at: parseDate(item.metadata.startDate?.[0]),
+          published_at: parseDate(
+            item.metadata.publicationDate?.[0] ??
+              item.metadata.openingDate?.[0] ??
+              item.metadata.startDate?.[0],
+          ),
           deadline_at: parseDate(item.metadata.deadlineDate?.[0]),
           fetched_at: fetchedAt,
           location: "Avrupa / Global",

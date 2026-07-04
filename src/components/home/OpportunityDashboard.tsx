@@ -12,7 +12,9 @@ import {
 } from "@/components/home/RefreshStatus";
 import { StatsCards } from "@/components/home/StatsCards";
 import { TickerBar } from "@/components/home/TickerBar";
+import { TimeRangeTabs } from "@/components/home/TimeRangeTabs";
 import type { CountryGroup } from "@/lib/opportunities/countryGroup";
+import type { TimeRange } from "@/lib/opportunities/opportunityFilters";
 import type { Opportunity } from "@/types/opportunity";
 
 type ApiResponse = {
@@ -26,16 +28,39 @@ type ApiResponse = {
     page: number;
     limit: number;
     hasMore: boolean;
+    timeRange: TimeRange;
+    query: string;
   };
 };
 
 const PAGE_SIZE = 24;
+
+function buildParams(options: {
+  page: number;
+  category: string;
+  countryGroup: CountryGroup;
+  timeRange: TimeRange;
+  query: string;
+}) {
+  const params = new URLSearchParams({
+    limit: String(PAGE_SIZE),
+    page: String(options.page),
+    countryGroup: options.countryGroup,
+    timeRange: options.timeRange,
+  });
+  if (options.category !== "Tümü") {
+    params.set("category", options.category);
+  }
+  if (options.query.trim()) params.set("q", options.query.trim());
+  return params;
+}
 
 export function OpportunityDashboard() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Tümü");
   const [countryGroup, setCountryGroup] = useState<CountryGroup>("all");
+  const [timeRange, setTimeRange] = useState<TimeRange>("near");
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<ApiResponse["meta"] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,13 +109,13 @@ export function OpportunityDashboard() {
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        page: "1",
+      const params = buildParams({
+        page: 1,
+        category,
         countryGroup,
+        timeRange,
+        query,
       });
-      if (category !== "Tümü") params.set("category", category);
-      if (query.trim()) params.set("q", query.trim());
 
       setLoading(true);
       setPage(1);
@@ -104,27 +129,31 @@ export function OpportunityDashboard() {
           setMeta(payload.meta);
         })
         .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return;
+          }
           console.error(error);
         })
-        .finally(() => setLoading(false));
-    }, 250);
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 300);
 
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [category, countryGroup, query]);
+  }, [category, countryGroup, query, timeRange]);
 
   async function loadMore() {
     const nextPage = page + 1;
-    const params = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      page: String(nextPage),
+    const params = buildParams({
+      page: nextPage,
+      category,
       countryGroup,
+      timeRange,
+      query,
     });
-    if (category !== "Tümü") params.set("category", category);
-    if (query.trim()) params.set("q", query.trim());
 
     setLoadingMore(true);
     try {
@@ -167,24 +196,27 @@ export function OpportunityDashboard() {
           />
 
           <main id="firsatlar" className="min-w-0">
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="atlas-muted text-[10px] font-bold uppercase tracking-[0.16em]">
-                  Canlı ekosistem panosu
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <h1 className="text-xl font-bold sm:text-2xl">
-                    {category === "Tümü" ? "Tüm fırsatlar" : category}
-                  </h1>
-                  <span className="atlas-count rounded-full px-3 py-1 text-[10px] font-bold text-white">
-                    {meta?.count ?? 0} kayıt
-                  </span>
+            <div className="mb-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="atlas-muted text-[10px] font-bold uppercase tracking-[0.16em]">
+                    Canlı ekosistem panosu
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <h1 className="text-xl font-bold sm:text-2xl">
+                      {category === "Tümü" ? "Tüm fırsatlar" : category}
+                    </h1>
+                    <span className="atlas-count rounded-full px-3 py-1 text-[10px] font-bold text-white">
+                      {meta?.count ?? 0} kayıt
+                    </span>
+                  </div>
                 </div>
+                <CountryFilterTabs
+                  value={countryGroup}
+                  onChange={setCountryGroup}
+                />
               </div>
-              <CountryFilterTabs
-                value={countryGroup}
-                onChange={setCountryGroup}
-              />
+              <TimeRangeTabs value={timeRange} onChange={setTimeRange} />
             </div>
 
             <RefreshStatus state={refreshState} />
@@ -228,6 +260,25 @@ export function OpportunityDashboard() {
                   </div>
                 )}
               </>
+            ) : query.trim() ? (
+              <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center">
+                <p className="text-sm font-semibold">
+                  Bu arama için sonuç bulunamadı.
+                </p>
+                <p className="atlas-muted mt-2 text-xs">
+                  Farklı bir kelime deneyebilir veya Tüm tarihler filtresini
+                  açabilirsin.
+                </p>
+                {timeRange !== "all" && (
+                  <button
+                    type="button"
+                    onClick={() => setTimeRange("all")}
+                    className="atlas-refresh mt-5 rounded-full px-5 py-2.5 text-xs font-bold text-white"
+                  >
+                    Tüm tarihlerde ara
+                  </button>
+                )}
+              </div>
             ) : (
               <div className="atlas-panel mt-5 rounded-2xl px-6 py-16 text-center text-sm">
                 Bu filtrelerle eşleşen bir fırsat bulunamadı.
@@ -238,7 +289,11 @@ export function OpportunityDashboard() {
 
         <footer className="atlas-footer mt-8 flex flex-col gap-2 border-t py-5 text-[10px] sm:flex-row sm:justify-between">
           <span>Girişim Atlası · gerçek kaynaklardan güncel ekosistem verileri</span>
-          <span className={meta?.source === "supabase" ? "atlas-success" : "atlas-muted"}>
+          <span
+            className={
+              meta?.source === "supabase" ? "atlas-success" : "atlas-muted"
+            }
+          >
             ●{" "}
             {meta?.source === "supabase"
               ? "Supabase veri kaynağı aktif"
