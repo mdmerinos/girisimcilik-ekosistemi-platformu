@@ -12,6 +12,7 @@ import { enrichOpportunityDescriptions } from "@/lib/ingestion/extractOpportunit
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import { normalizeOpportunity } from "@/lib/ingestion/normalizeOpportunity";
+import { shouldKeepForIngestion } from "@/lib/opportunities/opportunityFreshness";
 import {
   sourceConfigs,
   type SourceConfig,
@@ -84,8 +85,13 @@ export async function ingestSource(
   } else {
     try {
       const collected = await source.collect();
+      const freshnessFiltered = collected.filter((item) =>
+        shouldKeepForIngestion(item),
+      );
+      const freshnessSkippedCount =
+        collected.length - freshnessFiltered.length;
       const descriptionEnriched = await enrichOpportunityDescriptions(
-        collected,
+        freshnessFiltered,
         source.id,
       );
       const normalized: OpportunityInput[] = [];
@@ -125,9 +131,11 @@ export async function ingestSource(
       const status =
         collected.length === 0
           ? "empty"
-          : relevanceSkippedCount === collected.length
+          : normalized.length === 0
             ? "skipped"
-            : invalidCount > 0 || relevanceSkippedCount > 0
+            : invalidCount > 0 ||
+                relevanceSkippedCount > 0 ||
+                freshnessSkippedCount > 0
             ? "partial"
             : "success";
 
@@ -137,10 +145,16 @@ export async function ingestSource(
         collected: collected.length,
         inserted: upsert.inserted,
         updated: upsert.updated,
-        skipped: invalidCount + duplicateCount + relevanceSkippedCount,
+        skipped:
+          invalidCount +
+          duplicateCount +
+          relevanceSkippedCount +
+          freshnessSkippedCount,
         durationMs: Date.now() - startedAt,
         error:
-          relevanceSkippedCount > 0
+          freshnessSkippedCount > 0
+            ? `${freshnessSkippedCount} eski/arşiv kayıt güncel akıştan çıkarıldı.`
+            : relevanceSkippedCount > 0
             ? relevanceSkippedCount === collected.length
               ? "Girişimcilik kapsamı dışında olduğu için atlandı."
               : `${relevanceSkippedCount} kayıt girişimcilik kapsamı dışında olduğu için atlandı.`

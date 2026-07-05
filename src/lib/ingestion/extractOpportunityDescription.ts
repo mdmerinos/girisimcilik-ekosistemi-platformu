@@ -11,6 +11,10 @@ const DETAIL_SOURCE_IDS = new Set([
   "eu-funding",
   "nato-diana",
   "odtu-teknokent",
+  "kosgeb-announcements",
+  "kosgeb-supports",
+  "tubitak",
+  "tubitak-bigg",
 ]);
 const MAX_DETAIL_REQUESTS_PER_SOURCE = 16;
 const DETAIL_CONCURRENCY = 4;
@@ -53,7 +57,15 @@ export function cleanDescriptionText(
   if (!text) return "";
 
   const $ = cheerio.load(`<body>${text}</body>`);
-  $("script, style, noscript").remove();
+  $("script, style, noscript, nav, footer, aside").remove();
+  $("body")
+    .find("*")
+    .filter((_, element) =>
+      /^(?:share|read more|learn more|posted|apply)$/i.test(
+        normalizeText($(element).text()),
+      ),
+    )
+    .remove();
   return truncateAtBoundary(
     normalizeText($("body").text().replace(/\u200B|\uFEFF/g, " ")),
   );
@@ -78,7 +90,8 @@ export function isBadDescription(
     /^the defence innovation accelerator for the north atlantic is\b/.test(
       normalized,
     ) ||
-    /^(?:cookie|privacy) (?:policy|notice)/.test(normalized)
+    /^(?:cookie|privacy) (?:policy|notice)/.test(normalized) ||
+    /^(?:share|menu|footer|navigation)\b/.test(normalized)
   ) {
     return true;
   }
@@ -153,12 +166,16 @@ export function extractDescriptionFromHtml(
       '[id*="scope"]',
       '[class*="summary"]',
       '[id*="summary"]',
+      '[class*="abstract"]',
+      '[id*="abstract"]',
+      '[class*="expected-outcome"]',
+      '[id*="expected-outcome"]',
     ].join(","),
   ).each((_, element) => add($(element).text()));
 
   $("h2, h3, h4, strong").each((_, element) => {
     if (
-      /\b(description|synopsis|objective|scope|summary|açıklama|özet)\b/i.test(
+      /\b(description|synopsis|objective|scope|summary|abstract|expected outcome|opportunity synopsis|funding opportunity description|açıklama|özet)\b/i.test(
         normalizeText($(element).text()),
       )
     ) {

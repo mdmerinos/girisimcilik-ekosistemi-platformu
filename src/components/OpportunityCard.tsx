@@ -29,6 +29,7 @@ const statusColors = {
   "Başvuruya açık": "border-[#6bcb77]/30 text-[#6bcb77]",
   "Gelecek çağrı": "border-[#00d9f5]/30 text-[#00d9f5]",
   Kapandı: "border-[#ff6b6b]/30 text-[#ff8585]",
+  "Eski arşiv kaydı": "border-[#ffd93d]/30 text-[#d6a900]",
   "Tarih belirsiz": "border-[var(--atlas-border)] atlas-muted",
 } as const;
 

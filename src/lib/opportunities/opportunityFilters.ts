@@ -1,4 +1,8 @@
 import type { Opportunity } from "@/types/opportunity";
+import {
+  isOldArchiveOpportunity,
+  type FreshnessOpportunity,
+} from "@/lib/opportunities/opportunityFreshness";
 
 export const TIME_RANGES = ["near", "active", "all"] as const;
 export type TimeRange = (typeof TIME_RANGES)[number];
@@ -109,11 +113,12 @@ export function matchesOpportunitySearch(
 }
 
 export function matchesTimeRange(
-  item: Pick<Opportunity, "deadline_at" | "published_at">,
+  item: FreshnessOpportunity,
   timeRange: TimeRange,
   now = new Date(),
 ): boolean {
   if (timeRange === "all") return true;
+  if (isOldArchiveOpportunity(item, now)) return false;
 
   const today = startOfDay(now);
   const deadline = validTime(item.deadline_at);
@@ -125,7 +130,9 @@ export function matchesTimeRange(
   }
 
   if (published === null) return false;
-  if (timeRange === "active") return true;
+  if (timeRange === "active") {
+    return published >= today - 180 * DAY_MS;
+  }
   return published >= today - 90 * DAY_MS;
 }
 
@@ -196,10 +203,11 @@ export type OpportunityStatus =
   | "Başvuruya açık"
   | "Gelecek çağrı"
   | "Kapandı"
+  | "Eski arşiv kaydı"
   | "Tarih belirsiz";
 
 export function getOpportunityStatus(
-  item: Pick<Opportunity, "deadline_at" | "published_at">,
+  item: FreshnessOpportunity,
   now = new Date(),
 ): OpportunityStatus {
   const today = startOfDay(now);
@@ -207,6 +215,7 @@ export function getOpportunityStatus(
   const published = validTime(item.published_at);
 
   if (deadline !== null && deadline < today) return "Kapandı";
+  if (isOldArchiveOpportunity(item, now)) return "Eski arşiv kaydı";
   if (
     deadline !== null &&
     deadline > nearRangeEnd(now)

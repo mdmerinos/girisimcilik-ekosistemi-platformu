@@ -117,6 +117,30 @@ test("deadline is appended only when a valid stored deadline exists", () => {
   assert.doesNotMatch(withDeadline, /(?:tutar|bütçe|milyon|milyar)/i);
 });
 
+test("specific fallback changes with the title and rejects title repetition", () => {
+  const first = opportunity({
+    title: "Birinci KOSGEB çağrısı",
+    summary: "Birinci KOSGEB çağrısı",
+    source_name: "KOSGEB Duyuruları",
+    category: "Ulusal Destek ve Fonlar",
+  });
+  const second = opportunity({
+    title: "İkinci KOSGEB programı",
+    summary: "İkinci KOSGEB programı",
+    source_name: "KOSGEB Duyuruları",
+    category: "Ulusal Destek ve Fonlar",
+  });
+
+  assert.equal(isBadSummary(first.summary, first.title), true);
+  assert.equal(isBadSummary(second.summary, second.title), true);
+  assert.notEqual(
+    getCardSummaryDisplay(first).text,
+    getCardSummaryDisplay(second).text,
+  );
+  assert.match(getCardSummaryDisplay(first).text, /Birinci KOSGEB çağrısı/);
+  assert.match(getCardSummaryDisplay(second).text, /İkinci KOSGEB programı/);
+});
+
 test("description extractor follows meta, OG and JSON-LD priority", () => {
   const title = "Startup innovation opportunity";
   const meta = extractDescriptionFromHtml(
@@ -157,6 +181,59 @@ test("description extractor rejects short posting text and accepts useful paragr
     ) ?? "",
     /^This opportunity supports/,
   );
+});
+
+test("description extractor reads objective, synopsis, scope and abstract fields", () => {
+  const title = "Official innovation call";
+  const cases = [
+    `<section class="objective">This objective explains the official innovation call and provides substantial context for potential applicants on the source page.</section>`,
+    `<h2>Opportunity synopsis</h2><p>This synopsis explains the official opportunity with enough source-specific context for organizations considering an application.</p>`,
+    `<div id="scope">This scope describes the intended research and innovation context in sufficient detail for the official call record.</div>`,
+    `<div class="abstract">This abstract contains a meaningful description of the official programme and its documented innovation focus.</div>`,
+  ];
+
+  for (const html of cases) {
+    assert.notEqual(extractDescriptionFromHtml(html, title), null, html);
+  }
+});
+
+test("KOSGEB description enrichment uses the real detail page when available", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(`
+      <html>
+        <head>
+          <meta name="description" content="KOSGEB'in resmî detay sayfasında yer alan bu açıklama, güncel destek duyurusuna ilişkin doğrulanabilir kaynak bilgisini içerir.">
+        </head>
+      </html>
+    `);
+
+  try {
+    const [enriched] = await enrichOpportunityDescriptions(
+      [
+        {
+          unique_key: "kosgeb:current",
+          title: "Güncel KOSGEB destek duyurusu",
+          summary: "Devamını oku",
+          category: "Ulusal Destek ve Fonlar",
+          source_name: "KOSGEB Duyuruları",
+          source_url:
+            "https://www.kosgeb.gov.tr/site/tr/genel/detay/9999/guncel",
+          application_url: null,
+          published_at: "2026-07-04T00:00:00.000Z",
+          deadline_at: null,
+          fetched_at: "2026-07-05T10:00:00.000Z",
+          location: "Türkiye",
+          is_featured: false,
+        },
+      ],
+      "kosgeb-announcements",
+    );
+
+    assert.match(enriched.summary ?? "", /^KOSGEB'in resmî detay sayfasında/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("blocked detail pages return fallback without breaking enrichment", async () => {

@@ -12,6 +12,10 @@ import {
 } from "@/lib/opportunities/opportunityFilters";
 import { matchesOpportunitySource } from "@/lib/opportunities/opportunitySource";
 import {
+  hasArchiveSignal,
+  shouldKeepForIngestion,
+} from "@/lib/opportunities/opportunityFreshness";
+import {
   filterOpportunityRows,
   resolveCategoryFilter,
   resolveTodayFilter,
@@ -110,6 +114,84 @@ test("near, active and all ranges preserve their date semantics", () => {
   assert.equal(matchesTimeRange(noDate, "all", now), true);
 });
 
+test("old KOSGEB press clippings stay out of near and active views", () => {
+  const archive = opportunity({
+    unique_key: "kosgeb-archive",
+    title: "KOBİ’lere 1 milyon TL dijitalleşme desteği",
+    summary: "Türkiye Gazetesi basın kupürü",
+    source_name: "KOSGEB Duyuruları",
+    source_url:
+      "https://www.kosgeb.gov.tr/site/tr/genel/detay/1234/turkiye-gazetesi",
+    published_at: "2020-07-23T00:00:00.000Z",
+    deadline_at: null,
+  });
+
+  assert.equal(hasArchiveSignal(archive), true);
+  assert.equal(matchesTimeRange(archive, "near", now), false);
+  assert.equal(matchesTimeRange(archive, "active", now), false);
+  assert.equal(matchesTimeRange(archive, "all", now), true);
+  assert.equal(getOpportunityStatus(archive, now), "Eski arşiv kaydı");
+  assert.equal(shouldKeepForIngestion(archive, now), false);
+});
+
+test("current official calls and active deadlines are preserved", () => {
+  const recentKosgeb = opportunity({
+    unique_key: "kosgeb-current",
+    title: "KOBİ Dijital Dönüşüm Destek Programı başvuruları",
+    summary:
+      "KOBİ'lerin güncel dijital dönüşüm başvurularına ilişkin resmi duyuru.",
+    source_name: "KOSGEB Duyuruları",
+    source_url:
+      "https://www.kosgeb.gov.tr/site/tr/genel/detay/9999/guncel-duyuru",
+    category: "Ulusal Destek ve Fonlar",
+    published_at: "2026-07-01T00:00:00.000Z",
+  });
+  const recentTubitak = opportunity({
+    unique_key: "tubitak-current",
+    title: "TÜBİTAK 1507 güncel çağrısı",
+    summary: "KOBİ Ar-Ge başlangıç destek programı için güncel çağrı duyurusu.",
+    source_name: "TÜBİTAK",
+    source_url: "https://tubitak.gov.tr/tr/duyuru/1507-guncel-cagri",
+    category: "Ulusal Destek ve Fonlar",
+    published_at: "2026-07-02T00:00:00.000Z",
+  });
+  const oldPublicationWithActiveDeadline = opportunity({
+    unique_key: "active-deadline",
+    title: "Resmî destek programı",
+    source_name: "KOSGEB Destekleri",
+    source_url:
+      "https://www.kosgeb.gov.tr/site/tr/genel/destekdetay/9998/program",
+    category: "Ulusal Destek ve Fonlar",
+    published_at: "2020-07-23T00:00:00.000Z",
+    deadline_at: "2026-09-01T00:00:00.000Z",
+  });
+
+  for (const item of [
+    recentKosgeb,
+    recentTubitak,
+    oldPublicationWithActiveDeadline,
+  ]) {
+    assert.equal(matchesTimeRange(item, "near", now), true, item.unique_key);
+    assert.equal(matchesTimeRange(item, "active", now), true, item.unique_key);
+    assert.equal(shouldKeepForIngestion(item, now), true, item.unique_key);
+  }
+});
+
+test("expired deadlines stay closed even when the record is archival", () => {
+  const expiredArchive = opportunity({
+    unique_key: "expired-archive",
+    title: "Eski destek çağrısı",
+    summary: "Arşiv sayfası",
+    source_name: "KOSGEB Duyuruları",
+    source_url: "https://www.kosgeb.gov.tr/arsiv/eski-cagri",
+    published_at: "2020-07-23T00:00:00.000Z",
+    deadline_at: "2021-01-01T00:00:00.000Z",
+  });
+
+  assert.equal(matchesTimeRange(expiredArchive, "active", now), false);
+  assert.equal(getOpportunityStatus(expiredArchive, now), "Kapandı");
+});
+
 test("sorting prioritizes near deadlines, recent publications and far calls", () => {
   const rows = sortOpportunities(
     [
@@ -202,6 +284,20 @@ test("today ingestion uses created_at but never fetched_at", () => {
 
   assert.equal(matchesTodayFilter(fetchedToday, "ingested", now), false);
   assert.equal(matchesTodayFilter(fetchedToday, "published", now), false);
+});
+
+test("an old record added today is ingested today but not published today", () => {
+  const oldRecord = opportunity({
+    unique_key: "old-added-today",
+    source_name: "KOSGEB Duyuruları",
+    source_url: "https://www.kosgeb.gov.tr/arsiv/eski-haber",
+    published_at: "2020-07-23T00:00:00.000Z",
+    created_at: "2026-07-04T10:00:00.000Z",
+    fetched_at: "2026-07-04T10:00:00.000Z",
+  });
+
+  assert.equal(matchesTodayFilter(oldRecord, "ingested", now), true);
+  assert.equal(matchesTodayFilter(oldRecord, "published", now), false);
 });
 
 test("stat filters distinguish far-future and undated records", () => {

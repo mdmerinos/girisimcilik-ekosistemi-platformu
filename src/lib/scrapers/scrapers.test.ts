@@ -11,7 +11,10 @@ import { fetchEuFunding } from "@/lib/scrapers/euFundingApi";
 import { extractPageMetadata } from "@/lib/scrapers/extractPageMetadata";
 import { scrapeGenericHtml } from "@/lib/scrapers/genericHtmlScraper";
 import { resolveGrantsGovDeadline } from "@/lib/scrapers/grantsGovApi";
-import { scrapeKosgebSupports } from "@/lib/scrapers/kosgebScraper";
+import {
+  scrapeKosgebAnnouncements,
+  scrapeKosgebSupports,
+} from "@/lib/scrapers/kosgebScraper";
 import {
   extractOdtuDeadlineAt,
   extractOdtuPublishedAt,
@@ -111,6 +114,37 @@ test("KOSGEB support cards retain their real detail URL", async () => {
       items[0].source_url,
       "https://www.kosgeb.gov.tr/site/tr/genel/destekdetay/9144/kobi-dijital-donusum-destek-programi",
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("KOSGEB announcements exclude press archives but keep current calls", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(`
+      <main>
+        <article>
+          <a href="/site/tr/genel/detay/9999/guncel-destek-cagrisi">
+            Güncel KOSGEB Destek Çağrısı
+          </a>
+          <p>KOBİ'ler için güncel başvuru ve destek duyurusu.</p>
+          <time>04.07.2026</time>
+        </article>
+        <article>
+          <a href="/site/tr/genel/detay/1234/turkiye-gazetesi">
+            KOBİ’lere 1 milyon TL dijitalleşme desteği
+          </a>
+          <p>Türkiye Gazetesi basın kupürü</p>
+          <time>23.07.2020</time>
+        </article>
+      </main>
+    `);
+
+  try {
+    const items = await scrapeKosgebAnnouncements();
+    assert.equal(items.length, 1);
+    assert.equal(items[0].title, "Güncel KOSGEB Destek Çağrısı");
   } finally {
     globalThis.fetch = originalFetch;
   }
