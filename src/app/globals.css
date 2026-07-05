@@ -221,10 +221,10 @@ a {
 
 @keyframes atlas-ticker {
   from {
-    transform: translateX(0);
+    transform: translateX(100vw);
   }
   to {
-    transform: translateX(-50%);
+    transform: translateX(-100%);
   }
 }
 

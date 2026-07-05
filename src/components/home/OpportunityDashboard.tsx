@@ -28,6 +28,7 @@ import {
   OPPORTUNITY_SOURCE_OPTIONS,
   type OpportunitySource,
 } from "@/lib/opportunities/opportunitySource";
+import { selectTickerItems } from "@/lib/opportunities/opportunityTicker";
 import type { Opportunity } from "@/types/opportunity";
 
 type ApiResponse = {
@@ -54,6 +55,11 @@ type ApiResponse = {
     } | null;
     query: string;
   };
+};
+
+type TickerApiResponse = {
+  data: Opportunity[];
+  meta: { source: "supabase" | "fallback" };
 };
 
 const PAGE_SIZE = 24;
@@ -84,6 +90,7 @@ function buildParams(options: {
 
 export function OpportunityDashboard() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [tickerItems, setTickerItems] = useState<Opportunity[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Tümü");
   const [countryGroup, setCountryGroup] = useState<CountryGroup>("all");
@@ -165,6 +172,51 @@ export function OpportunityDashboard() {
         });
       });
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const common = new URLSearchParams({
+      limit: "100",
+      page: "1",
+      countryGroup: "all",
+      timeRange: "all",
+      statFilter: "all",
+      source: "all",
+    });
+    const allParams = new URLSearchParams(common);
+    allParams.set("today", "all");
+    const ingestedParams = new URLSearchParams(common);
+    ingestedParams.set("today", "todayIngested");
+
+    Promise.all(
+      [allParams, ingestedParams].map((params) =>
+        fetch(`/api/opportunities?${params}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        }).then((response) => {
+          if (!response.ok) throw new Error("Ticker kayıtları alınamadı.");
+          return response.json() as Promise<TickerApiResponse>;
+        }),
+      ),
+    )
+      .then((payloads) => {
+        if (payloads.some((payload) => payload.meta.source !== "supabase")) {
+          setTickerItems([]);
+          return;
+        }
+        setTickerItems(
+          selectTickerItems(payloads.flatMap((payload) => payload.data)),
+        );
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setTickerItems([]);
+      });
+
+    return () => controller.abort();
+  }, [dataVersion]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -317,7 +369,7 @@ export function OpportunityDashboard() {
 
   return (
     <div className="atlas-shell min-h-screen">
-      <TickerBar items={opportunities} />
+      <TickerBar items={tickerItems} />
       <HomeHeader
         query={query}
         onQueryChange={setQuery}
@@ -333,6 +385,10 @@ export function OpportunityDashboard() {
           refreshToken={dataVersion}
           activeFilter={activeStatsCard}
           onFilterSelect={selectStatsFilter}
+          category={category}
+          countryGroup={countryGroup}
+          source={source}
+          query={query}
         />
         <div className="mt-6 grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]">
           <CategorySidebar
@@ -422,9 +478,8 @@ export function OpportunityDashboard() {
                   Bu filtrede gösterilecek kayıt bulunamadı.
                 </p>
                 <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
-                  Bugün kaynaklarda yayımlanmış yeni kayıt yakalanmadı. Bugün
-                  sisteme eklenen kayıtları görmek için ilgili filtreyi
-                  deneyebilirsin.
+                  Bugün kaynaklarda yayımlanmış ve yayın tarihi yakalanmış kayıt
+                  bulunamadı.
                 </p>
               </div>
             ) : today === "ingested" ? (

@@ -2,44 +2,42 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { fallbackOpportunities } from "@/data/fallbackOpportunities";
-import {
-  INVESTMENT_CATEGORY,
-  isStrictInvestmentOpportunity,
-} from "@/lib/ingestion/investmentClassification";
-import {
-  COUNTRY_GROUPS,
-  matchesCountryGroup,
-} from "@/lib/opportunities/countryGroup";
-import { sanitizeNasaSbirOpportunityDates } from "@/lib/opportunities/nasaSbirDates";
+import { COUNTRY_GROUPS } from "@/lib/opportunities/countryGroup";
 import {
   STAT_FILTERS,
-  TODAY_FILTERS,
   TIME_RANGES,
-  matchesOpportunitySearch,
-  matchesStatFilter,
-  matchesTodayFilter,
-  matchesTimeRange,
   sortOpportunities,
 } from "@/lib/opportunities/opportunityFilters";
 import {
-  OPPORTUNITY_SOURCES,
-  matchesOpportunitySource,
-} from "@/lib/opportunities/opportunitySource";
+  CATEGORY_QUERY_FILTERS,
+  TODAY_QUERY_FILTERS,
+  filterOpportunityRows,
+  getCategoryCounts,
+  resolveCategoryFilter,
+  resolveTodayFilter,
+} from "@/lib/opportunities/opportunityQueryFilters";
+import { OPPORTUNITY_SOURCES } from "@/lib/opportunities/opportunitySource";
 import {
   createAdminSupabaseClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/admin";
-import { OPPORTUNITY_CATEGORIES, type Opportunity } from "@/types/opportunity";
+import type { Opportunity } from "@/types/opportunity";
 
 export const dynamic = "force-dynamic";
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(100),
   page: z.coerce.number().int().min(1).default(1),
-  category: z.enum(OPPORTUNITY_CATEGORIES).optional(),
+  category: z
+    .enum(CATEGORY_QUERY_FILTERS)
+    .optional()
+    .transform(resolveCategoryFilter),
   countryGroup: z.enum(COUNTRY_GROUPS).default("all"),
   timeRange: z.enum(TIME_RANGES).default("near"),
-  today: z.enum(TODAY_FILTERS).default("all"),
+  today: z
+    .enum(TODAY_QUERY_FILTERS)
+    .default("all")
+    .transform(resolveTodayFilter),
   statFilter: z.enum(STAT_FILTERS).default("all"),
   source: z.enum(OPPORTUNITY_SOURCES).default("all"),
   q: z.string().trim().max(100).optional(),
@@ -62,16 +60,6 @@ async function getAllOpportunityRows(): Promise<Opportunity[]> {
     rows.push(...batch);
     if (batch.length < batchSize) return rows;
   }
-}
-
-function isAllowedForCategory(item: Opportunity, category?: string): boolean {
-  if (category !== INVESTMENT_CATEGORY) return true;
-  return isStrictInvestmentOpportunity({
-    title: item.title,
-    summary: item.summary,
-    sourceName: item.source_name,
-    category: item.category,
-  });
 }
 
 function prepareResponse(
@@ -99,16 +87,18 @@ function prepareResponse(
   const offset = (page - 1) * limit;
   const now = new Date();
 
-  const scopedRows = rows
-    .map(sanitizeNasaSbirOpportunityDates)
-    .filter((item) => matchesCountryGroup(item.location, countryGroup))
-    .filter(
-      (item) => today !== "all" || matchesTimeRange(item, timeRange, now),
-    )
-    .filter((item) => matchesTodayFilter(item, today, now))
-    .filter((item) => matchesStatFilter(item, statFilter, now))
-    .filter((item) => matchesOpportunitySource(item, sourceFilter))
-    .filter((item) => matchesOpportunitySearch(item, q));
+  const scopedRows = filterOpportunityRows(
+    rows,
+    {
+      countryGroup,
+      timeRange,
+      today,
+      statFilter,
+      source: sourceFilter,
+      query: q,
+    },
+    now,
+  );
 
   const lastDataAddedAt =
     rows
@@ -117,23 +107,10 @@ function prepareResponse(
       .sort()
       .at(-1) ?? null;
 
-  const categoryCounts = Object.fromEntries(
-    OPPORTUNITY_CATEGORIES.map((itemCategory) => [
-      itemCategory,
-      scopedRows.filter(
-        (item) =>
-          item.category === itemCategory &&
-          isAllowedForCategory(item, itemCategory),
-      ).length,
-    ]),
-  );
+  const categoryCounts = getCategoryCounts(scopedRows);
 
   const filteredRows = sortOpportunities(
-    scopedRows.filter(
-      (item) =>
-        (!category || item.category === category) &&
-        isAllowedForCategory(item, category ?? item.category),
-    ),
+    scopedRows.filter((item) => !category || item.category === category),
     now,
   );
   const data = filteredRows.slice(offset, offset + limit);

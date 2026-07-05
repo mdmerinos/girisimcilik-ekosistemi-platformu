@@ -41,10 +41,7 @@ export function calculateOpportunityStats(
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const farFutureBoundary = nearRangeEnd(now);
   const todayIngestedCount = opportunities.filter((item) =>
-    Boolean(
-      isSameIstanbulDay(item.created_at, now) ||
-        isSameIstanbulDay(item.fetched_at, now),
-    ),
+    isSameIstanbulDay(item.created_at, now),
   ).length;
   const lastDataAddedAt =
     opportunities

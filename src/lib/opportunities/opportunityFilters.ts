@@ -57,9 +57,7 @@ export function matchesTodayFilter(
   if (!today) return false;
 
   if (filter === "ingested") {
-    return (
-      dateKey(item.created_at) === today || dateKey(item.fetched_at) === today
-    );
+    return dateKey(item.created_at) === today;
   }
   if (filter === "published") {
     return isSameIstanbulDay(item.published_at, now);

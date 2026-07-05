@@ -11,6 +11,14 @@ import {
   sortOpportunities,
 } from "@/lib/opportunities/opportunityFilters";
 import { matchesOpportunitySource } from "@/lib/opportunities/opportunitySource";
+import {
+  filterOpportunityRows,
+  resolveCategoryFilter,
+  resolveTodayFilter,
+  type OpportunityQueryFilterOptions,
+} from "@/lib/opportunities/opportunityQueryFilters";
+import { calculateOpportunityStats } from "@/lib/opportunities/opportunityStats";
+import { selectTickerItems } from "@/lib/opportunities/opportunityTicker";
 import { formatDateTime } from "@/lib/utils/formatDateTime";
 import type { Opportunity } from "@/types/opportunity";
 
@@ -184,6 +192,18 @@ test("today filters keep ingestion, publication and deadline semantics separate"
   assert.equal(matchesTodayFilter(item, "deadline", istanbulToday), true);
 });
 
+test("today ingestion uses created_at but never fetched_at", () => {
+  const fetchedToday = opportunity({
+    unique_key: "fetched-only",
+    created_at: "2026-07-01T10:00:00.000Z",
+    fetched_at: "2026-07-04T10:00:00.000Z",
+    published_at: null,
+  });
+
+  assert.equal(matchesTodayFilter(fetchedToday, "ingested", now), false);
+  assert.equal(matchesTodayFilter(fetchedToday, "published", now), false);
+});
+
 test("stat filters distinguish far-future and undated records", () => {
   const future = opportunity({
     unique_key: "future-stat",
@@ -238,5 +258,171 @@ test("date-time formatting always uses two digits and Istanbul time", () => {
   assert.equal(
     formatDateTime("2026-07-04T15:53:00.000Z"),
     "04.07.2026 18:53",
+  );
+});
+
+const queryDefaults: OpportunityQueryFilterOptions = {
+  countryGroup: "all",
+  timeRange: "all",
+  today: "all",
+  statFilter: "all",
+  source: "all",
+};
+
+test("stats card counts and list totals share every query filter", () => {
+  const rows = [
+    opportunity({
+      unique_key: "published-today",
+      title: "Tech accelerator call",
+      source_name: "Grants.gov",
+      category: "Uluslararası Fonlar",
+      location: "Global",
+      created_at: "2026-07-01T10:00:00.000Z",
+      fetched_at: "2026-07-04T10:00:00.000Z",
+      published_at: "2026-07-04T08:00:00.000Z",
+      deadline_at: "2026-09-01T00:00:00.000Z",
+    }),
+    opportunity({
+      unique_key: "ingested-today",
+      title: "Startup grant programme",
+      source_name: "Grants.gov",
+      category: "Uluslararası Fonlar",
+      location: "Global",
+      created_at: "2026-07-04T09:00:00.000Z",
+      fetched_at: "2026-07-04T09:00:00.000Z",
+      published_at: null,
+      deadline_at: "2026-11-01T00:00:00.000Z",
+    }),
+    opportunity({
+      unique_key: "deadline-today",
+      title: "NATO technology challenge",
+      source_name: "NATO DIANA",
+      category: "Uluslararası Fonlar",
+      location: "Global",
+      created_at: "2026-06-01T09:00:00.000Z",
+      fetched_at: "2026-07-04T09:00:00.000Z",
+      published_at: "2026-06-01T09:00:00.000Z",
+      deadline_at: "2026-07-04T18:00:00.000Z",
+    }),
+    opportunity({
+      unique_key: "turkiye-tech",
+      title: "Tech girişim destek programı",
+      source_name: "TÜBİTAK",
+      category: "Ulusal Destek ve Fonlar",
+      location: "Türkiye",
+      created_at: "2026-07-01T09:00:00.000Z",
+      fetched_at: "2026-07-04T09:00:00.000Z",
+      published_at: "2026-07-02T09:00:00.000Z",
+      deadline_at: "2026-10-01T00:00:00.000Z",
+    }),
+    opportunity({
+      unique_key: "fetched-not-published",
+      title: "Fetched record",
+      source_name: "Grants.gov",
+      category: "Uluslararası Fonlar",
+      location: "Global",
+      created_at: "2026-07-01T09:00:00.000Z",
+      fetched_at: "2026-07-04T11:00:00.000Z",
+      published_at: null,
+      deadline_at: null,
+    }),
+  ];
+  const baseRows = filterOpportunityRows(rows, queryDefaults, now);
+  const stats = calculateOpportunityStats(baseRows, now);
+
+  assert.equal(
+    stats.todayPublishedCount,
+    filterOpportunityRows(
+      rows,
+      { ...queryDefaults, today: "published" },
+      now,
+    ).length,
+  );
+  assert.equal(
+    stats.todayIngestedCount,
+    filterOpportunityRows(
+      rows,
+      { ...queryDefaults, today: "ingested" },
+      now,
+    ).length,
+  );
+  assert.equal(
+    stats.todayDeadlineCount,
+    filterOpportunityRows(
+      rows,
+      { ...queryDefaults, today: "deadline" },
+      now,
+    ).length,
+  );
+  assert.equal(
+    stats.nearCount,
+    filterOpportunityRows(
+      rows,
+      { ...queryDefaults, timeRange: "near" },
+      now,
+    ).length,
+  );
+
+  for (const scope of [
+    { category: "Uluslararası Fonlar" as const },
+    { source: "grants-gov" as const },
+    { countryGroup: "turkiye" as const },
+    { query: "tech" },
+  ]) {
+    const scopedOptions = { ...queryDefaults, ...scope };
+    const scopedRows = filterOpportunityRows(rows, scopedOptions, now);
+    const scopedStats = calculateOpportunityStats(scopedRows, now);
+    const publishedRows = filterOpportunityRows(
+      rows,
+      { ...scopedOptions, today: "published" },
+      now,
+    );
+    assert.equal(scopedStats.todayPublishedCount, publishedRows.length);
+  }
+
+  assert.equal(stats.todayPublishedCount, 1);
+  assert.equal(stats.todayIngestedCount, 1);
+  assert.equal(resolveTodayFilter("todayPublished"), "published");
+  assert.equal(resolveTodayFilter("todayIngested"), "ingested");
+  assert.equal(resolveTodayFilter("deadlineToday"), "deadline");
+  assert.equal(resolveCategoryFilter("INT-FON"), "Uluslararası Fonlar");
+});
+
+test("ticker uses only unique real input records in priority order", () => {
+  const ingested = opportunity({
+    unique_key: "ticker-ingested",
+    title: "Bugün eklenen teknoloji çağrısı",
+    source_name: "Grants.gov",
+    created_at: "2026-07-04T09:00:00.000Z",
+    deadline_at: "2026-09-01T00:00:00.000Z",
+  });
+  const duplicate = opportunity({
+    ...ingested,
+    id: "ticker-duplicate",
+    unique_key: "ticker-duplicate",
+  });
+  const recent = opportunity({
+    unique_key: "ticker-recent",
+    title: "Yeni yayımlanan program",
+    source_name: "NATO DIANA",
+    created_at: "2026-06-01T09:00:00.000Z",
+    published_at: "2026-07-03T09:00:00.000Z",
+  });
+  const selected = selectTickerItems([recent, duplicate, ingested], now, 15);
+
+  assert.equal(selected.length, 2);
+  assert.equal(selected[0].unique_key, "ticker-duplicate");
+  assert.ok(
+    selected.every((item) =>
+      [recent, duplicate, ingested].some(
+        (sourceItem) => sourceItem.unique_key === item.unique_key,
+      ),
+    ),
+  );
+  assert.equal(
+    new Set(
+      selected.map((item) => `${item.source_name}::${item.title}`),
+    ).size,
+    selected.length,
   );
 });
