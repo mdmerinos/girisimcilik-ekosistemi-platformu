@@ -146,6 +146,47 @@ export function filterOpportunityRows(
     );
 }
 
+export function getOpportunityFilterDiagnostics(
+  rows: Opportunity[],
+  options: OpportunityQueryFilterOptions,
+  now = new Date(),
+) {
+  const sanitized = rows.map(sanitizeNasaSbirOpportunityDates);
+  return {
+    totalRows: sanitized.length,
+    hiddenByInvestmentValidation: sanitized.filter(
+      (item) => !isAllowedOpportunity(item),
+    ).length,
+    hiddenByContentView: sanitized.filter(
+      (item) => !matchesContentView(item, options.contentView),
+    ).length,
+    hiddenByCountry: sanitized.filter(
+      (item) => !matchesCountryGroup(item.location, options.countryGroup),
+    ).length,
+    hiddenByTimeRange:
+      options.today === "all"
+        ? sanitized.filter(
+            (item) => !matchesTimeRange(item, options.timeRange, now),
+          ).length
+        : 0,
+    hiddenByToday: sanitized.filter(
+      (item) => !matchesTodayFilter(item, options.today, now),
+    ).length,
+    hiddenByStat: sanitized.filter(
+      (item) => !matchesStatFilter(item, options.statFilter, now),
+    ).length,
+    hiddenBySource: sanitized.filter(
+      (item) => !matchesOpportunitySource(item, options.source),
+    ).length,
+    hiddenBySearch: sanitized.filter(
+      (item) => !matchesOpportunitySearch(item, options.query),
+    ).length,
+    hiddenByCategory: options.category
+      ? sanitized.filter((item) => item.category !== options.category).length
+      : 0,
+  };
+}
+
 export function getCategoryCounts(
   rows: Opportunity[],
 ): Record<OpportunityCategory, number> {

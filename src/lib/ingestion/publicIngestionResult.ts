@@ -10,6 +10,8 @@ export type PublicIngestionResult = {
     collected: number;
     inserted: number;
     updated: number;
+    skipped: number;
+    diagnostics: IngestionResult["sources"][number]["diagnostics"];
     error: string | null;
     workerRequired: boolean;
   }>;
@@ -58,6 +60,8 @@ export function toPublicIngestionResult(
       collected: source.collected,
       inserted: source.inserted,
       updated: source.updated,
+      skipped: source.skipped,
+      diagnostics: source.diagnostics,
       error: publicSourceMessage(source),
       workerRequired: ["nato-diana", "odtu-teknokent"].includes(
         source.sourceId,

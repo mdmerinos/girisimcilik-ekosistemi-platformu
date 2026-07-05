@@ -11,6 +11,7 @@ import {
   INVESTMENT_CATEGORY,
 } from "@/lib/ingestion/investmentClassification";
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
+import { buildSourceDiagnostics } from "@/lib/ingestion/sourceDiagnostics";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import {
   isWorkerAuthorized,
@@ -337,6 +338,63 @@ test("Hacker News accepts strong startup funding signals and rejects funding alo
     }),
     INVESTMENT_CATEGORY,
   );
+});
+
+test("source diagnostics report filters, duplicates and upsert results", () => {
+  const item = {
+    unique_key: "diagnostic-item",
+    title: "AI startup raises $5M seed round",
+    summary: "Technology startup funding news.",
+    category: "Yatırım ve Sermaye Ağları" as const,
+    source_name: "TechCrunch",
+    source_url: "https://techcrunch.com/2026/07/05/startup-round/",
+    application_url: "https://techcrunch.com/2026/07/05/startup-round/",
+    image_url: null,
+    published_at: "2026-07-05T08:00:00.000Z",
+    deadline_at: null,
+    fetched_at: "2026-07-05T09:00:00.000Z",
+    location: "Global",
+    is_featured: false,
+  };
+  const diagnostics = buildSourceDiagnostics({
+    fetchUrls: ["https://techcrunch.com/feed/"],
+    httpStatus: 200,
+    collected: [item, item],
+    accepted: [item],
+    filtered: {
+      archive: 0,
+      old: 0,
+      relevance: 0,
+      invalid: 0,
+      duplicate: 1,
+    },
+    inserted: 1,
+    updated: 0,
+    now: new Date("2026-07-05T12:00:00.000Z"),
+  });
+
+  assert.equal(diagnostics.raw, 2);
+  assert.equal(diagnostics.accepted, 1);
+  assert.equal(diagnostics.filtered.duplicate, 1);
+  assert.equal(diagnostics.upserted, 1);
+  assert.equal(diagnostics.freshness, "last24Hours");
+});
+
+test("manual refresh source set includes the new ecosystem news sources", () => {
+  for (const id of [
+    "webrazzi-rss",
+    "egirisim-rss",
+    "startupcentrum-news",
+    "techcrunch-rss",
+    "tubitak",
+    "kosgeb-announcements",
+  ]) {
+    assert.equal(
+      sourceConfigs.find((source) => source.id === id)?.enabled,
+      true,
+      id,
+    );
+  }
 });
 
 test("force refresh bypasses freshness but preserves the global cooldown", () => {

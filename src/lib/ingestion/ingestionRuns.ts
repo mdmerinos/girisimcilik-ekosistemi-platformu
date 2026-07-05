@@ -21,6 +21,26 @@ export type SourceIngestionResult = {
   skipped: number;
   durationMs: number;
   error: string | null;
+  diagnostics?: {
+    fetchUrls: string[];
+    fallbackStatus: "not_configured" | "not_needed" | "success" | "failed";
+    httpStatus: number | null;
+    raw: number;
+    accepted: number;
+    filtered: {
+      archive: number;
+      old: number;
+      relevance: number;
+      invalid: number;
+      duplicate: number;
+    };
+    upserted: number;
+    newestPublishedAt: string | null;
+    newestTitles: string[];
+    freshness: "last24Hours" | "last7Days" | "last30Days" | "older" | "unknown";
+    freshnessMessage: string;
+    acceptedCategories: Record<string, number>;
+  };
 };
 
 export type IngestionRunRow = {

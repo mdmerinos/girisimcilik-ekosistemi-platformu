@@ -56,6 +56,18 @@ type ApiResponse = {
       lastRunAt: string | null;
     } | null;
     query: string;
+    filterDiagnostics: {
+      totalRows: number;
+      hiddenByInvestmentValidation: number;
+      hiddenByContentView: number;
+      hiddenByCountry: number;
+      hiddenByTimeRange: number;
+      hiddenByToday: number;
+      hiddenByStat: number;
+      hiddenBySource: number;
+      hiddenBySearch: number;
+      hiddenByCategory: number;
+    };
   };
 };
 
@@ -570,6 +582,15 @@ export function OpportunityDashboard() {
                 <p className="text-sm font-semibold">
                   Bu filtrede gösterilecek kayıt bulunamadı.
                 </p>
+                {meta?.filterDiagnostics && (
+                  <p className="atlas-muted mx-auto mt-2 max-w-2xl text-xs leading-5">
+                    Aktif filtre tanısı: zaman aralığı{" "}
+                    {meta.filterDiagnostics.hiddenByTimeRange}, içerik görünümü{" "}
+                    {meta.filterDiagnostics.hiddenByContentView}, kategori{" "}
+                    {meta.filterDiagnostics.hiddenByCategory}, kaynak{" "}
+                    {meta.filterDiagnostics.hiddenBySource} kaydı saklıyor.
+                  </p>
+                )}
               </div>
             )}
           </main>

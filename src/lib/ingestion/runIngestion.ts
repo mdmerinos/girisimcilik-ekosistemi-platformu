@@ -12,7 +12,11 @@ import { enrichOpportunityDescriptions } from "@/lib/ingestion/extractOpportunit
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import { normalizeOpportunity } from "@/lib/ingestion/normalizeOpportunity";
-import { shouldKeepForIngestion } from "@/lib/opportunities/opportunityFreshness";
+import { buildSourceDiagnostics } from "@/lib/ingestion/sourceDiagnostics";
+import {
+  hasArchiveSignal,
+  shouldKeepForIngestion,
+} from "@/lib/opportunities/opportunityFreshness";
 import {
   sourceConfigs,
   type SourceConfig,
@@ -22,6 +26,10 @@ import {
   SOURCE_STATUSES,
   type SourceStatus,
 } from "@/lib/ingestion/sourceStatus";
+import {
+  BotProtectionError,
+  HttpError,
+} from "@/lib/ingestion/fetchWithRetry";
 import { upsertOpportunities } from "@/lib/ingestion/upsertOpportunities";
 import type { OpportunityInput } from "@/types/opportunity";
 
@@ -43,6 +51,12 @@ function titleSourceIdentity(item: OpportunityInput): string {
     .replace(/ı/g, "i")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function errorHttpStatus(error: unknown): number | null {
+  if (error instanceof HttpError) return error.status;
+  if (error instanceof BotProtectionError) return 200;
+  return null;
 }
 
 export class IngestionAlreadyRunningError extends Error {
@@ -91,15 +105,43 @@ export async function ingestSource(
       skipped: 0,
       durationMs: Date.now() - startedAt,
       error: `${source.requiredEnv} tanımlı değil`,
+      diagnostics: buildSourceDiagnostics({
+        fetchUrls: source.fetchUrls ?? [source.url],
+        httpStatus: null,
+        collected: [],
+        accepted: [],
+        filtered: {
+          archive: 0,
+          old: 0,
+          relevance: 0,
+          invalid: 0,
+          duplicate: 0,
+        },
+        inserted: 0,
+        updated: 0,
+        fallbackMessage: "Kaynak yapılandırması eksik.",
+      }),
     };
   } else {
     try {
-      const collected = await source.collect();
+      const collection = source.collectDetailed
+        ? await source.collectDetailed()
+        : {
+            items: await source.collect(),
+            attemptedUrls: [source.url],
+            fallbackStatus: "not_configured" as const,
+          };
+      const collected = collection.items;
+      const archiveSkippedCount = collected.filter(
+        (item) => !shouldKeepForIngestion(item) && hasArchiveSignal(item),
+      ).length;
       const freshnessFiltered = collected.filter((item) =>
         shouldKeepForIngestion(item),
       );
       const freshnessSkippedCount =
         collected.length - freshnessFiltered.length;
+      const oldSkippedCount =
+        freshnessSkippedCount - archiveSkippedCount;
       const descriptionEnriched = await enrichOpportunityDescriptions(
         freshnessFiltered,
         source.id,
@@ -172,6 +214,26 @@ export async function ingestSource(
               ? "Girişimcilik kapsamı dışında olduğu için atlandı."
               : `${relevanceSkippedCount} kayıt girişimcilik kapsamı dışında olduğu için atlandı.`
             : null,
+        diagnostics: buildSourceDiagnostics({
+          fetchUrls: collection.attemptedUrls,
+          fallbackStatus: collection.fallbackStatus,
+          httpStatus: 200,
+          collected,
+          accepted: uniqueItems,
+          filtered: {
+            archive: archiveSkippedCount,
+            old: oldSkippedCount,
+            relevance: relevanceSkippedCount,
+            invalid: invalidCount,
+            duplicate: duplicateCount,
+          },
+          inserted: upsert.inserted,
+          updated: upsert.updated,
+          staleMessage:
+            source.kind === "rss"
+              ? "RSS güncel kayıt döndürmedi."
+              : "Kaynak güncel kayıt döndürmedi.",
+        }),
       };
     } catch (error) {
       const classified = classifySourceError(error, source.fragile);
@@ -184,6 +246,22 @@ export async function ingestSource(
         skipped: 0,
         durationMs: Date.now() - startedAt,
         error: classified.message,
+        diagnostics: buildSourceDiagnostics({
+          fetchUrls: source.fetchUrls ?? [source.url],
+          httpStatus: errorHttpStatus(error),
+          collected: [],
+          accepted: [],
+          filtered: {
+            archive: 0,
+            old: 0,
+            relevance: 0,
+            invalid: 0,
+            duplicate: 0,
+          },
+          inserted: 0,
+          updated: 0,
+          fallbackMessage: classified.message,
+        }),
       };
     }
   }
@@ -226,6 +304,22 @@ export async function runIngestion(
         skipped: 0,
         durationMs: 0,
         error: classified.message,
+        diagnostics: buildSourceDiagnostics({
+          fetchUrls: source.fetchUrls ?? [source.url],
+          httpStatus: errorHttpStatus(error),
+          collected: [],
+          accepted: [],
+          filtered: {
+            archive: 0,
+            old: 0,
+            relevance: 0,
+            invalid: 0,
+            duplicate: 0,
+          },
+          inserted: 0,
+          updated: 0,
+          fallbackMessage: classified.message,
+        }),
       };
 
       try {

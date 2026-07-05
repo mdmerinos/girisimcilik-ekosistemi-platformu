@@ -13,6 +13,7 @@ import {
   CONTENT_VIEWS,
   TODAY_QUERY_FILTERS,
   filterOpportunityRows,
+  getOpportunityFilterDiagnostics,
   getCategoryCounts,
   resolveCategoryFilter,
   resolveTodayFilter,
@@ -103,6 +104,20 @@ function prepareResponse(
     },
     now,
   );
+  const filterDiagnostics = getOpportunityFilterDiagnostics(
+    rows,
+    {
+      category,
+      countryGroup,
+      contentView: view,
+      timeRange,
+      today,
+      statFilter,
+      source: sourceFilter,
+      query: q,
+    },
+    now,
+  );
 
   const lastDataAddedAt =
     rows
@@ -139,6 +154,7 @@ function prepareResponse(
       view,
       sourceWorkerStatus,
       query: q ?? "",
+      filterDiagnostics,
     },
   });
 }

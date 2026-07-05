@@ -143,6 +143,15 @@ export function isEntrepreneurshipRelevant(
   const investmentSignal = hasStrictInvestmentSignal(input);
   const strongKeyword = findKeyword(content, STRONG_KEYWORDS);
   const trustedWorkerSource = /(?:odtu-teknokent|nato-diana)/.test(context);
+  const trustedEditorialSource =
+    /(?:webrazzi|egirisim|startupcentrum|swipeline|techcrunch|eu-startups|crunchbase-news|itu-ari-teknokent)/.test(
+      context,
+    );
+  const editorialTechnologySignal =
+    trustedEditorialSource &&
+    /\b(?:teknoloji|technology|tech|yapay zeka|artificial intelligence|ai|software|saas|fintech|deep tech|robotik|robotics|siber guvenlik|cybersecurity|urun|product|lansman|launch|inovasyon|innovation|ekosistem|ecosystem|startup|girisim)\b/i.test(
+      content,
+    );
   const trustedTechnologySignal =
     trustedWorkerSource &&
     /\b(?:teknoloji|technology|deep tech|innovation|inovasyon|challenge|program|programme|commercialization|ticarileştirme|ticarilestirme)\b/i.test(
@@ -185,6 +194,13 @@ export function isEntrepreneurshipRelevant(
     return {
       relevant: true,
       reason: "Güvenilir worker kaynağında teknoloji veya program sinyali eşleşti.",
+    };
+  }
+
+  if (editorialTechnologySignal) {
+    return {
+      relevant: true,
+      reason: "Güvenilir ekosistem haber kaynağında teknoloji sinyali eşleşti.",
     };
   }
 

@@ -21,6 +21,25 @@ type SourceResult = {
   skipped: number;
   durationMs: number;
   error: string | null;
+  diagnostics?: {
+    fetchUrls: string[];
+    fallbackStatus: "not_configured" | "not_needed" | "success" | "failed";
+    httpStatus: number | null;
+    raw: number;
+    accepted: number;
+    filtered: {
+      archive: number;
+      old: number;
+      relevance: number;
+      invalid: number;
+      duplicate: number;
+    };
+    upserted: number;
+    newestPublishedAt: string | null;
+    newestTitles: string[];
+    freshnessMessage: string;
+    acceptedCategories: Record<string, number>;
+  };
 };
 
 type RunResult = {
@@ -509,6 +528,82 @@ export function IngestionControl() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {visibleLogs.some((log) => log.diagnostics) && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-[#25372c]">
+            Canlı kaynak doğrulama raporu
+          </h2>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            {visibleLogs
+              .filter((log) => log.diagnostics)
+              .map((log) => {
+                const diagnostics = log.diagnostics!;
+                return (
+                  <article
+                    key={log.sourceId}
+                    className="rounded-2xl border border-[#dfe5df] bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-[#25372c]">
+                          {log.sourceName}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-[#748078]">
+                          HTTP {diagnostics.httpStatus ?? "—"} ·{" "}
+                          {diagnostics.freshnessMessage}
+                        </p>
+                        {diagnostics.fallbackStatus !== "not_configured" && (
+                          <p className="mt-1 text-[11px] text-[#748078]">
+                            Public latest fallback:{" "}
+                            {diagnostics.fallbackStatus}
+                          </p>
+                        )}
+                      </div>
+                      <span
+                        className={`rounded-full px-2 py-1 text-[10px] ${
+                          SOURCE_STATUS_PRESENTATION[log.status].className
+                        }`}
+                      >
+                        {log.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                      <div>Ham: {diagnostics.raw}</div>
+                      <div>Kabul: {diagnostics.accepted}</div>
+                      <div>Duplicate: {diagnostics.filtered.duplicate}</div>
+                      <div>Upsert: {diagnostics.upserted}</div>
+                      <div>Arşiv: {diagnostics.filtered.archive}</div>
+                      <div>Eski: {diagnostics.filtered.old}</div>
+                      <div>Kapsam dışı: {diagnostics.filtered.relevance}</div>
+                      <div>Geçersiz: {diagnostics.filtered.invalid}</div>
+                    </div>
+                    <p className="mt-3 text-xs text-[#5e6d63]">
+                      En yeni yayın:{" "}
+                      {diagnostics.newestPublishedAt
+                        ? formatDate(diagnostics.newestPublishedAt)
+                        : "Kaynak yayın tarihi yakalanmadı"}
+                    </p>
+                    <div className="mt-3 space-y-1 text-[11px] text-[#748078]">
+                      {diagnostics.fetchUrls.map((url) => (
+                        <p key={url} className="break-all">
+                          {url}
+                        </p>
+                      ))}
+                    </div>
+                    {diagnostics.newestTitles.length > 0 && (
+                      <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-[#394a40]">
+                        {diagnostics.newestTitles.map((title) => (
+                          <li key={title}>{title}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </article>
+                );
+              })}
+          </div>
         </div>
       )}
 

@@ -9,7 +9,6 @@ import {
   getCardSummaryDisplay,
   shouldShowTurkishExplanationButton,
 } from "@/lib/opportunities/opportunityDisplayText";
-import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
 import { getOpportunityStatus } from "@/lib/opportunities/opportunityFilters";
 import {
   chooseOpportunityUrl,
@@ -36,7 +35,6 @@ const statusColors = {
 export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
   const [showTurkishExplanation, setShowTurkishExplanation] = useState(false);
   const explanationId = useId();
-  const dateDisplay = getOpportunityDateDisplay(opportunity);
   const status = getOpportunityStatus(opportunity);
   const summaryDisplay = getCardSummaryDisplay(opportunity);
   const showExplanationButton =
@@ -132,14 +130,32 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
         </div>
         <div className="min-w-0">
           <dt className="atlas-muted text-[9px] font-bold uppercase tracking-[0.12em]">
-            Tarih
+            Kaynak yayın tarihi
           </dt>
           <dd className="atlas-text mt-1 font-medium">
-            {dateDisplay
-              ? `${dateDisplay.label}: ${dayjs(dateDisplay.value).format("DD.MM.YYYY")}`
-              : "Tarih belirtilmemiş"}
+            {opportunity.published_at
+              ? dayjs(opportunity.published_at).format("DD.MM.YYYY HH:mm")
+              : "Kaynak yayın tarihi yakalanmadı."}
           </dd>
         </div>
+        <div className="min-w-0">
+          <dt className="atlas-muted text-[9px] font-bold uppercase tracking-[0.12em]">
+            Sisteme eklenme
+          </dt>
+          <dd className="atlas-text mt-1 font-medium">
+            {dayjs(opportunity.created_at).format("DD.MM.YYYY HH:mm")}
+          </dd>
+        </div>
+        {opportunity.deadline_at && (
+          <div className="min-w-0">
+            <dt className="atlas-muted text-[9px] font-bold uppercase tracking-[0.12em]">
+              Son başvuru
+            </dt>
+            <dd className="atlas-text mt-1 font-medium">
+              {dayjs(opportunity.deadline_at).format("DD.MM.YYYY")}
+            </dd>
+          </div>
+        )}
       </dl>
 
       <div className="mt-4 flex justify-end">

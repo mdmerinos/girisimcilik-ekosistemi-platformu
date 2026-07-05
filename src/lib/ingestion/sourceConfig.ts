@@ -11,6 +11,12 @@ import {
   scrapeKosgebSupports,
 } from "@/lib/scrapers/kosgebScraper";
 import { scrapeOdtuTeknokent } from "@/lib/scrapers/odtuTeknokentScraper";
+import {
+  collectRssWithPublicFallback,
+  collectRssWithPublicFallbackDetailed,
+  scrapePublicNewsListing,
+  type PublicNewsListingOptions,
+} from "@/lib/scrapers/publicNewsListingScraper";
 import { scrapeRss } from "@/lib/scrapers/rssScraper";
 import { fetchSamGov } from "@/lib/scrapers/samGovApi";
 import {
@@ -39,6 +45,7 @@ export type SourceConfig = {
   name: string;
   kind: SourceKind;
   url: string;
+  fetchUrls?: string[];
   enabled: boolean;
   fragile: boolean;
   requiresApiKey: boolean;
@@ -48,6 +55,11 @@ export type SourceConfig = {
   country: string;
   notes: string;
   collect: () => Promise<OpportunityInput[]>;
+  collectDetailed?: () => Promise<{
+    items: OpportunityInput[];
+    attemptedUrls: string[];
+    fallbackStatus: "not_needed" | "success" | "failed";
+  }>;
 };
 
 type RssSourceOptions = {
@@ -60,23 +72,49 @@ type RssSourceOptions = {
   country: string;
   notes: string;
   fragile?: boolean;
+  publicFallback?: PublicNewsListingOptions;
 };
 
 function rssSource(options: RssSourceOptions): SourceConfig {
+  const collectRss = () =>
+    scrapeRss({
+      feedUrl: options.url,
+      sourceName: options.sourceName ?? options.name,
+      category: options.category,
+      maxItems: 50,
+      location: options.country,
+    });
+  const collectFallbackDetailed = options.publicFallback
+    ? () =>
+        collectRssWithPublicFallbackDetailed({
+          collectRss,
+          collectPublic: () =>
+            scrapePublicNewsListing(options.publicFallback!),
+          rssUrl: options.url,
+          publicUrl: options.publicFallback!.url,
+        })
+    : undefined;
   return {
     ...options,
     kind: "rss",
     enabled: true,
     fragile: options.fragile ?? false,
     requiresApiKey: false,
+    fetchUrls: [
+      options.url,
+      ...(options.publicFallback ? [options.publicFallback.url] : []),
+    ],
     collect: () =>
-      scrapeRss({
-        feedUrl: options.url,
-        sourceName: options.sourceName ?? options.name,
-        category: options.category,
-        maxItems: 50,
-        location: options.country,
-      }),
+      options.publicFallback
+        ? collectRssWithPublicFallback({
+            collectRss,
+            collectPublic: () =>
+              scrapePublicNewsListing(options.publicFallback!),
+            rssUrl: options.url,
+            publicUrl: options.publicFallback.url,
+          })
+        : collectRss(),
+    collectDetailed: collectFallbackDetailed,
   };
 }
 
@@ -121,6 +159,17 @@ export const sourceConfigs: SourceConfig[] = [
     opportunityType: "news",
     country: "Türkiye",
     notes: "Resmî RSS akışı.",
+    publicFallback: {
+      url: "https://webrazzi.com/",
+      sourceName: "Webrazzi",
+      category: "Haber ve Sosyal Medya Akışı",
+      location: "Türkiye",
+      itemSelector: 'a[href*="webrazzi.com/20"]',
+      linkPattern: /webrazzi\.com\/20\d{2}\/\d{1,2}\/\d{1,2}\/[^/]+\/?$/i,
+      containerSelector: "article, li, .post, .card",
+      summarySelector: "p",
+      maxItems: 50,
+    },
   }),
   rssSource({
     id: "swipeline-rss",
@@ -140,6 +189,17 @@ export const sourceConfigs: SourceConfig[] = [
     opportunityType: "news",
     country: "Global",
     notes: "Ana teknoloji ve startup RSS akışı.",
+    publicFallback: {
+      url: "https://techcrunch.com/category/startups/",
+      sourceName: "TechCrunch",
+      category: "Haber ve Sosyal Medya Akışı",
+      location: "Global",
+      itemSelector: ".loop-card__content a[href]",
+      linkPattern: /techcrunch\.com\/20\d{2}\/\d{1,2}\/\d{1,2}\/[^/]+\/?$/i,
+      containerSelector: ".loop-card__content, article",
+      summarySelector: "p",
+      maxItems: 50,
+    },
   }),
   rssSource({
     id: "techcrunch-startups-rss",
@@ -198,6 +258,18 @@ export const sourceConfigs: SourceConfig[] = [
     opportunityType: "news",
     country: "Türkiye",
     notes: "Resmî WordPress RSS akışı.",
+    publicFallback: {
+      url: "https://egirisim.com/",
+      sourceName: "egirişim",
+      category: "Haber ve Sosyal Medya Akışı",
+      location: "Türkiye",
+      itemSelector: ".td-module-meta-info h1 a[href], .td-module-meta-info h2 a[href], .td-module-meta-info h3 a[href]",
+      linkPattern: /egirisim\.com\/20\d{2}\/\d{1,2}\/\d{1,2}\/[^/]+\/?$/i,
+      containerSelector: ".td_module_wrap, article, .td-module-meta-info",
+      summarySelector: ".td-excerpt, p",
+      dateSelector: "time, .entry-date, .td-post-date",
+      maxItems: 50,
+    },
   }),
   rssSource({
     id: "startupcentrum-news",
@@ -207,6 +279,19 @@ export const sourceConfigs: SourceConfig[] = [
     opportunityType: "news",
     country: "Türkiye",
     notes: "StartupCentrum Media public RSS akışı; iş ilanı sayfaları yerine editoryal içerik alınır.",
+    publicFallback: {
+      url: "https://media.startupcentrum.com/tr/",
+      sourceName: "StartupCentrum",
+      category: "Haber ve Sosyal Medya Akışı",
+      location: "Türkiye",
+      itemSelector: ".td-module-meta-info h1 a[href], .td-module-meta-info h2 a[href], .td-module-meta-info h3 a[href]",
+      linkPattern: /media\.startupcentrum\.com\/tr\/[^/]+\/?$/i,
+      excludeLinkPattern: /\/(?:category|tag|author|wp-admin|jobs?|ilan)\//i,
+      containerSelector: ".td_module_wrap, article, .td-module-meta-info",
+      summarySelector: ".td-excerpt, p",
+      dateSelector: "time, .entry-date, .td-post-date",
+      maxItems: 50,
+    },
   }),
   rssSource({
     id: "eu-startups-rss",
@@ -216,6 +301,18 @@ export const sourceConfigs: SourceConfig[] = [
     opportunityType: "news",
     country: "Avrupa / Global",
     notes: "Public RSS akışı; startup ve yatırım sinyalleri içerik bazında sınıflandırılır.",
+    publicFallback: {
+      url: "https://www.eu-startups.com/",
+      sourceName: "EU-Startups",
+      category: "Haber ve Sosyal Medya Akışı",
+      location: "Avrupa / Global",
+      itemSelector: "main article h2 a[href], main article h3 a[href]",
+      linkPattern: /eu-startups\.com\/20\d{2}\/\d{1,2}\/[^/]+\/?$/i,
+      containerSelector: "article",
+      summarySelector: "p",
+      dateSelector: "time, .date",
+      maxItems: 50,
+    },
   }),
   htmlSource({
     id: "crunchbase-news",

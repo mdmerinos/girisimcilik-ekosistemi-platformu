@@ -17,6 +17,7 @@ import {
 } from "@/lib/opportunities/opportunityFreshness";
 import {
   filterOpportunityRows,
+  getOpportunityFilterDiagnostics,
   matchesContentView,
   resolveCategoryFilter,
   resolveTodayFilter,
@@ -432,6 +433,48 @@ const queryDefaults: OpportunityQueryFilterOptions = {
   statFilter: "all",
   source: "all",
 };
+
+test("stored news and investment records remain visible in their content views", () => {
+  const news = opportunity({
+    unique_key: "stored-news",
+    title: "Webrazzi yapay zeka teknolojisi haberi",
+    category: "Haber ve Sosyal Medya Akışı",
+    source_name: "Webrazzi",
+    published_at: "2026-07-05T08:00:00.000Z",
+  });
+  const investment = opportunity({
+    unique_key: "stored-investment",
+    title: "Yerli girişim 5 milyon dolar yatırım aldı",
+    summary: "Startup seed funding round.",
+    category: "Yatırım ve Sermaye Ağları",
+    source_name: "egirişim",
+    published_at: "2026-07-05T09:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    filterOpportunityRows(
+      [news, investment],
+      { ...queryDefaults, contentView: "news" },
+      new Date("2026-07-05T12:00:00.000Z"),
+    ).map((item) => item.unique_key),
+    ["stored-news"],
+  );
+  assert.deepEqual(
+    filterOpportunityRows(
+      [news, investment],
+      { ...queryDefaults, contentView: "investments" },
+      new Date("2026-07-05T12:00:00.000Z"),
+    ).map((item) => item.unique_key),
+    ["stored-investment"],
+  );
+
+  const diagnostics = getOpportunityFilterDiagnostics(
+    [news, investment],
+    { ...queryDefaults, contentView: "news" },
+    new Date("2026-07-05T12:00:00.000Z"),
+  );
+  assert.equal(diagnostics.hiddenByContentView, 1);
+});
 
 test("stats card counts and list totals share every query filter", () => {
   const rows = [

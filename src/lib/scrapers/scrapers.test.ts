@@ -22,12 +22,36 @@ import {
   scrapeOdtuTeknokent,
 } from "@/lib/scrapers/odtuTeknokentScraper";
 import { scrapeRss } from "@/lib/scrapers/rssScraper";
+import { collectRssWithPublicFallbackDetailed } from "@/lib/scrapers/publicNewsListingScraper";
 import { scrapeTubitakBigg } from "@/lib/scrapers/tubitakScraper";
 import {
   getOpportunityLinkLabel,
   resolveOpportunityUrl,
 } from "@/lib/utils/opportunityUrl";
 import { parseDate } from "@/lib/utils/parseDate";
+import type { OpportunityInput } from "@/types/opportunity";
+
+function newsInput(
+  title: string,
+  sourceUrl: string,
+  publishedAt: string | null,
+): OpportunityInput {
+  return {
+    unique_key: sourceUrl,
+    title,
+    summary: "Teknoloji girişimleri hakkında güncel haber özeti.",
+    category: "Haber ve Sosyal Medya Akışı",
+    source_name: "Test Haber",
+    source_url: sourceUrl,
+    application_url: sourceUrl,
+    image_url: null,
+    published_at: publishedAt,
+    deadline_at: null,
+    fetched_at: "2026-07-05T10:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+  };
+}
 
 test("generic HTML scraper maps matching cards", async () => {
   const originalFetch = globalThis.fetch;
@@ -277,6 +301,77 @@ test("RSS scraper never substitutes fetch time for a missing publication date", 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Webrazzi stale RSS triggers the public latest fallback", async () => {
+  const result = await collectRssWithPublicFallbackDetailed({
+    collectRss: async () => [
+      newsInput(
+        "Eski Webrazzi RSS haberi",
+        "https://webrazzi.com/2026/06/01/eski-haber/",
+        "2026-06-01T08:00:00.000Z",
+      ),
+    ],
+    collectPublic: async () => [
+      newsInput(
+        "Güncel Webrazzi public haberi",
+        "https://webrazzi.com/2026/07/05/guncel-haber/",
+        "2026-07-05T08:00:00.000Z",
+      ),
+    ],
+    rssUrl: "https://webrazzi.com/feed/",
+    publicUrl: "https://webrazzi.com/",
+    now: new Date("2026-07-05T12:00:00.000Z"),
+  });
+
+  assert.equal(result.items.length, 2);
+  assert.deepEqual(result.attemptedUrls, [
+    "https://webrazzi.com/feed/",
+    "https://webrazzi.com/",
+  ]);
+});
+
+test("eGirişim stale RSS triggers the public latest fallback", async () => {
+  let publicFallbackCalled = false;
+  const result = await collectRssWithPublicFallbackDetailed({
+    collectRss: async () => [
+      newsInput(
+        "Eski eGirişim RSS haberi",
+        "https://egirisim.com/2026/06/01/eski-haber/",
+        "2026-06-01T08:00:00.000Z",
+      ),
+    ],
+    collectPublic: async () => {
+      publicFallbackCalled = true;
+      return [];
+    },
+    rssUrl: "https://egirisim.com/feed/",
+    publicUrl: "https://egirisim.com/",
+    now: new Date("2026-07-05T12:00:00.000Z"),
+  });
+
+  assert.equal(publicFallbackCalled, true);
+  assert.equal(result.items.length, 1);
+});
+
+test("an inaccessible public fallback does not discard usable RSS records", async () => {
+  const rssItem = newsInput(
+    "Korunan RSS haberi",
+    "https://example.com/2026/06/01/rss-haberi/",
+    "2026-06-01T08:00:00.000Z",
+  );
+  const result = await collectRssWithPublicFallbackDetailed({
+    collectRss: async () => [rssItem],
+    collectPublic: async () => {
+      throw new Error("403 Cloudflare");
+    },
+    rssUrl: "https://example.com/feed/",
+    publicUrl: "https://example.com/latest/",
+    now: new Date("2026-07-05T12:00:00.000Z"),
+  });
+
+  assert.deepEqual(result.items, [rssItem]);
+  assert.equal(result.fallbackStatus, "failed");
 });
 
 test("metadata extractor reads social, canonical and JSON-LD fields", async () => {
