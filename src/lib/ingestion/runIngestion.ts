@@ -8,6 +8,7 @@ import {
   writeSourceLog,
 } from "@/lib/ingestion/ingestionRuns";
 import { applyInvestmentCategoryPriority } from "@/lib/ingestion/investmentClassification";
+import { enrichOpportunityDescriptions } from "@/lib/ingestion/extractOpportunityDescription";
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import { normalizeOpportunity } from "@/lib/ingestion/normalizeOpportunity";
@@ -83,11 +84,15 @@ export async function ingestSource(
   } else {
     try {
       const collected = await source.collect();
+      const descriptionEnriched = await enrichOpportunityDescriptions(
+        collected,
+        source.id,
+      );
       const normalized: OpportunityInput[] = [];
       let invalidCount = 0;
       let relevanceSkippedCount = 0;
 
-      for (const item of collected) {
+      for (const item of descriptionEnriched) {
         try {
           const normalizedItem = applyInvestmentCategoryPriority(
             normalizeOpportunity(item),

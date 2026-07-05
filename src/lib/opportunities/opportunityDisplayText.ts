@@ -1,5 +1,4 @@
-import dayjs from "dayjs";
-
+import { buildSpecificFallbackDescription } from "@/lib/opportunities/specificFallbackDescription";
 import { extractCleanSummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import type { Opportunity } from "@/types/opportunity";
 
@@ -111,6 +110,7 @@ export function isBoilerplateSummary(
   return [
     /^click here (?:for|to) (?:details|learn more)$/,
     /^find out more (?:at|on|via) (?:the )?(?:official )?(?:page|website)$/,
+    /^detayli bilgi icin kaynak sayfasini goruntuleyin/,
     /^(?:nato )?diana s (?:mission|vision|purpose) is\b/,
     /^the defence innovation accelerator for the north atlantic is\b/,
   ].some((pattern) => pattern.test(normalized));
@@ -160,44 +160,10 @@ export function getOriginalSummaryForCard(
   return extractCleanSummary(opportunity.summary, opportunity.title);
 }
 
-function sourceExplanation(sourceName: string): string {
-  const source = comparable(sourceName);
-
-  if (source.includes("grants gov")) {
-    return "Bu kayıt, Grants.gov üzerinde yayımlanan uluslararası bir fon veya hibe fırsatıdır. Program başlığı ve başvuru detayları resmi kaynak sayfasında yer almaktadır.";
-  }
-  if (source.includes("eu funding") || source.includes("funding tenders")) {
-    return "Bu kayıt, EU Funding & Tenders Portal üzerinde yayımlanan Avrupa Birliği fon veya çağrı fırsatıdır. Konu ve başvuru detayları resmi portalda yer almaktadır.";
-  }
-  if (source.includes("nato diana")) {
-    return "Bu kayıt, NATO DIANA tarafından yayımlanan teknoloji, inovasyon veya dual-use girişimcilik odaklı bir program/çağrı bilgisidir. Detaylar resmi NATO DIANA sayfasında yer almaktadır.";
-  }
-  if (source.includes("odtu teknokent")) {
-    return "Bu kayıt, ODTÜ Teknokent ekosisteminden gelen girişimcilik, program, yatırım, teknoloji veya duyuru bilgisidir. Detaylar resmi kaynak bağlantısında yer almaktadır.";
-  }
-  if (source.includes("kosgeb")) {
-    return "Bu kayıt, KOSGEB tarafından yayımlanan destek, program veya duyuru bilgisidir. Başvuru ve detay bilgileri resmi kaynakta yer almaktadır.";
-  }
-  if (source.includes("tubitak")) {
-    return "Bu kayıt, TÜBİTAK tarafından yayımlanan girişimcilik, destek, program veya çağrı bilgisidir. Detaylar resmi kaynakta yer almaktadır.";
-  }
-  if (source.includes("nasa sbir") || source.includes("nasa sttr")) {
-    return "Bu kayıt, NASA SBIR/STTR programı kapsamında yayımlanan teknoloji ve Ar-Ge odaklı bir destek veya çağrı bilgisidir. Detaylar resmi kaynakta yer almaktadır.";
-  }
-
-  return "Bu kayıt, girişimcilik ekosistemiyle ilişkili bir fırsat, program, destek veya haber bilgisidir. Detaylar resmi kaynak bağlantısında yer almaktadır.";
-}
-
 export function buildTurkishExplanation(
   opportunity: DisplayOpportunity,
 ): string {
-  const explanation = sourceExplanation(opportunity.source_name);
-  if (!opportunity.deadline_at) return explanation;
-
-  const deadline = dayjs(opportunity.deadline_at);
-  if (!deadline.isValid()) return explanation;
-
-  return `${explanation} Son başvuru tarihi: ${deadline.format("DD.MM.YYYY")}.`;
+  return buildSpecificFallbackDescription(opportunity);
 }
 
 export function getCardSummaryDisplay(
