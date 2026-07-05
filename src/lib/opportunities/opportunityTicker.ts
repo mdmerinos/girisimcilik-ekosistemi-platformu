@@ -3,6 +3,7 @@ import {
   matchesTimeRange,
   sortOpportunities,
 } from "@/lib/opportunities/opportunityFilters";
+import { isOldArchiveOpportunity } from "@/lib/opportunities/opportunityFreshness";
 import type { Opportunity } from "@/types/opportunity";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -40,7 +41,9 @@ export function selectTickerItems(
   now = new Date(),
   limit = 15,
 ): Opportunity[] {
-  const uniqueItems = uniqueByTitleAndSource(items);
+  const uniqueItems = uniqueByTitleAndSource(items).filter(
+    (item) => !isOldArchiveOpportunity(item, now),
+  );
   const recentBoundary = now.getTime() - 7 * DAY_MS;
   const ingestedToday = uniqueItems
     .filter((item) => matchesTodayFilter(item, "ingested", now))

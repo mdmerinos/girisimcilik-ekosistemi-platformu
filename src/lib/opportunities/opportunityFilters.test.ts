@@ -134,6 +134,36 @@ test("old KOSGEB press clippings stay out of near and active views", () => {
   assert.equal(shouldKeepForIngestion(archive, now), false);
 });
 
+test("undated Milliyet and Sabah press records stay out of default flows", () => {
+  const milliyet = opportunity({
+    unique_key: "kosgeb-milliyet",
+    title: "Milliyet Gazetesi Maske Üreticisine Destek Verilecek devamı için",
+    summary: null,
+    source_name: "KOSGEB Duyuruları",
+    source_url:
+      "https://www.kosgeb.gov.tr/site/tr/genel/detay/1111/milliyet",
+    published_at: null,
+    deadline_at: null,
+  });
+  const sabah = opportunity({
+    unique_key: "kosgeb-sabah",
+    title:
+      "Sabah Gazetesi 25 Şehirde 25 Teknoloji Geliştirme Merkezi devamı için",
+    summary: null,
+    source_name: "KOSGEB Duyuruları",
+    source_url: "https://www.kosgeb.gov.tr/site/tr/genel/detay/2222/sabah",
+    published_at: null,
+    deadline_at: null,
+  });
+
+  assert.equal(hasArchiveSignal(milliyet), true);
+  assert.equal(hasArchiveSignal(sabah), true);
+  assert.equal(matchesTimeRange(milliyet, "near", now), false);
+  assert.equal(matchesTimeRange(sabah, "active", now), false);
+  assert.equal(matchesTimeRange(milliyet, "all", now), true);
+  assert.equal(getOpportunityStatus(milliyet, now), "Eski arşiv kaydı");
+});
+
 test("current official calls and active deadlines are preserved", () => {
   const recentKosgeb = opportunity({
     unique_key: "kosgeb-current",
@@ -520,5 +550,37 @@ test("ticker uses only unique real input records in priority order", () => {
       selected.map((item) => `${item.source_name}::${item.title}`),
     ).size,
     selected.length,
+  );
+});
+
+test("ticker excludes KOSGEB press archives even when added today", () => {
+  const archive = opportunity({
+    unique_key: "ticker-kosgeb-archive",
+    title: "Türkiye Gazetesi",
+    summary: "Devamı için",
+    source_name: "KOSGEB Duyuruları",
+    source_url:
+      "https://www.kosgeb.gov.tr/site/tr/genel/detay/3333/turkiye-gazetesi",
+    created_at: "2026-07-04T11:00:00.000Z",
+    fetched_at: "2026-07-04T11:00:00.000Z",
+    published_at: null,
+    deadline_at: null,
+  });
+  const current = opportunity({
+    unique_key: "ticker-current-kosgeb",
+    title: "Güncel KOSGEB destek çağrısı",
+    summary: "KOBİ'ler için güncel destek ve başvuru duyurusu.",
+    source_name: "KOSGEB Duyuruları",
+    source_url:
+      "https://www.kosgeb.gov.tr/site/tr/genel/detay/9999/guncel-cagri",
+    created_at: "2026-07-04T10:00:00.000Z",
+    published_at: "2026-07-04T09:00:00.000Z",
+    deadline_at: "2026-09-01T00:00:00.000Z",
+  });
+
+  const selected = selectTickerItems([archive, current], now);
+  assert.deepEqual(
+    selected.map((item) => item.unique_key),
+    ["ticker-current-kosgeb"],
   );
 });

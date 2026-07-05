@@ -14,7 +14,7 @@ export async function scrapeKosgebAnnouncements(): Promise<OpportunityInput[]> {
     itemSelector: 'a[href*="/site/tr/genel/detay/"]',
     linkPattern: /kosgeb\.gov\.tr\/site\/tr\/genel\/detay\/\d+/i,
     excludeLinkPattern:
-      /\/detay\/(?:180|8535)\/|(?:turkiye-gazetesi|gazete|basinda|medya-yansimasi|kupur|arsiv)/i,
+      /\/detay\/(?:180|8535)\/|(?:turkiye-gazetesi|milliyet|sabah|gazete|basinda|medya|kupur|arsiv|devami-icin)/i,
     containerSelector: "article, .item, .news-item, li",
     summarySelector: "p",
     dateSelector: "time, .date, .tarih",

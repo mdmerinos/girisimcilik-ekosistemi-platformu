@@ -138,6 +138,16 @@ test("KOSGEB announcements exclude press archives but keep current calls", async
           <p>Türkiye Gazetesi basın kupürü</p>
           <time>23.07.2020</time>
         </article>
+        <article>
+          <a href="/site/tr/genel/detay/2345/milliyet">
+            Milliyet Gazetesi Maske Üreticisine Destek Verilecek devamı için
+          </a>
+        </article>
+        <article>
+          <a href="/site/tr/genel/detay/3456/sabah">
+            Sabah Gazetesi KOBİ'lere Üçlü Koruma Kalkanı devamı için
+          </a>
+        </article>
       </main>
     `);
 

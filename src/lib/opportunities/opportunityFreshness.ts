@@ -39,28 +39,42 @@ function startOfDay(value: Date): number {
 }
 
 export function hasArchiveSignal(item: FreshnessOpportunity): boolean {
-  const content = normalized(
+  const textContent = normalized(
     [
       item.title,
       item.summary,
-      item.source_url,
-      item.application_url,
     ]
       .filter(Boolean)
       .join(" "),
   );
   const source = normalized(item.source_name);
-  const strongArchiveSignal =
-    /\b(turkiye gazetesi|gazete kupuru|basinda biz|basin kupuru|medya yansimasi|arsiv sayfasi)\b/.test(
-      content,
+  const urlContent = normalized(
+    [item.source_url, item.application_url].filter(Boolean).join(" "),
+  );
+  const allContent = `${textContent} ${source} ${urlContent}`;
+  const officialSource =
+    /\b(kosgeb|tubitak|bakanlik|kalkinma ajansi|teknokent|sanayi ve teknoloji)\b/.test(
+      source,
     );
-  const archivePathSignal =
-    /\b(turkiye gazetesi|basinda|kupur|arsiv)\b/.test(content);
-  const kosgebArchiveSignal =
-    source.includes("kosgeb") &&
-    /\b(gazete|basinda|kupur|arsiv)\b/.test(content);
+  const strongArchiveSignal =
+    /\b(milliyet gazetesi|sabah gazetesi|turkiye gazetesi|gazete kupuru|basinda biz|basin kupuru|medya yansimasi|arsiv sayfasi|devami icin)\b/.test(
+      allContent,
+    );
+  const genericArchiveSignal =
+    /\b(gazete|basinda|kupur|arsiv)\b/.test(allContent);
+  const archiveUrlSignal =
+    /\b(turkiye gazetesi|milliyet|sabah|gazete|basinda|medya|arsiv|kupur)\b/.test(
+      urlContent,
+    );
+  const officialMediaSignal =
+    officialSource && /\bmedya\b/.test(textContent);
 
-  return strongArchiveSignal || archivePathSignal || kosgebArchiveSignal;
+  return (
+    strongArchiveSignal ||
+    genericArchiveSignal ||
+    archiveUrlSignal ||
+    officialMediaSignal
+  );
 }
 
 export function hasActiveDeadline(
