@@ -7,6 +7,10 @@ import { isOldArchiveOpportunity } from "@/lib/opportunities/opportunityFreshnes
 import type { Opportunity } from "@/types/opportunity";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const NEWS_CATEGORIES = new Set([
+  "Haber ve Sosyal Medya Akışı",
+  "Yatırım ve Sermaye Ağları",
+]);
 
 function identity(item: Opportunity): string {
   return `${item.source_name}::${item.title}`
@@ -46,10 +50,15 @@ export function selectTickerItems(
   );
   const recentBoundary = now.getTime() - 7 * DAY_MS;
   const ingestedToday = uniqueItems
-    .filter((item) => matchesTodayFilter(item, "ingested", now))
+    .filter(
+      (item) =>
+        NEWS_CATEGORIES.has(item.category) &&
+        matchesTodayFilter(item, "ingested", now),
+    )
     .sort(descendingDate("created_at"));
   const recentlyPublished = uniqueItems
     .filter((item) => {
+      if (!NEWS_CATEGORIES.has(item.category)) return false;
       if (!item.published_at) return false;
       const published = new Date(item.published_at).getTime();
       return (

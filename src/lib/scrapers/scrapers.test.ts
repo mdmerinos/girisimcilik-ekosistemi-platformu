@@ -252,6 +252,33 @@ test("Hacker News RSS replaces URL boilerplate with article metadata", async () 
   }
 });
 
+test("RSS scraper never substitutes fetch time for a missing publication date", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(`<?xml version="1.0" encoding="UTF-8" ?>
+      <rss version="2.0">
+        <channel>
+          <title>Test</title>
+          <item>
+            <title>Startup ekosistemi raporu</title>
+            <link>https://news.example.com/report</link>
+            <description>Güncel startup ve teknoloji ekosistemi analizi.</description>
+          </item>
+        </channel>
+      </rss>`);
+
+  try {
+    const [item] = await scrapeRss({
+      feedUrl: "https://news.example.com/feed",
+      sourceName: "Test Haber",
+    });
+    assert.equal(item.published_at, null);
+    assert.notEqual(item.fetched_at, item.published_at);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("metadata extractor reads social, canonical and JSON-LD fields", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>

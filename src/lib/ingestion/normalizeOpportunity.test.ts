@@ -160,3 +160,65 @@ test("investment signals upgrade news items to the investment category", () => {
     "Yatırım ve Sermaye Ağları",
   );
 });
+
+test("ecosystem source headlines are classified as investment, program or official support", () => {
+  const base = {
+    summary: "Teknoloji girişimleri için güncel ekosistem duyurusu.",
+    category: "Haber ve Sosyal Medya Akışı" as const,
+    source_url: "https://example.com/news",
+    application_url: null,
+    published_at: "2026-07-04T08:00:00.000Z",
+    deadline_at: null,
+    fetched_at: "2026-07-04T09:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+  };
+
+  for (const [source_name, title] of [
+    ["Webrazzi", "Yerli yapay zekâ girişimi yatırım aldı"],
+    ["egirişim", "Fintech girişimi yatırım turunu tamamladı"],
+    ["StartupCentrum", "SaaS startup raises $8M seed round"],
+    ["TechCrunch", "AI startup raises $20M Series A"],
+    ["Crunchbase News", "Startup raises $25M funding round"],
+    ["EU-Startups", "European startup raises €12M seed round"],
+  ]) {
+    assert.equal(
+      normalizeOpportunity({
+        ...base,
+        unique_key: `source-category-${source_name}`,
+        source_name,
+        title,
+      }).category,
+      "Yatırım ve Sermaye Ağları",
+      source_name,
+    );
+  }
+
+  assert.equal(
+    normalizeOpportunity({
+      ...base,
+      unique_key: "program-category",
+      source_name: "Swipeline",
+      title: "Yeni hızlandırıcı program başvuruları başladı",
+    }).category,
+    "Etkinlik ve Programlar",
+  );
+  assert.equal(
+    normalizeOpportunity({
+      ...base,
+      unique_key: "tubitak-category",
+      source_name: "TÜBİTAK Duyuruları",
+      title: "Teknoloji girişimleri için yeni çağrı",
+    }).category,
+    "Ulusal Destek ve Fonlar",
+  );
+  assert.equal(
+    normalizeOpportunity({
+      ...base,
+      unique_key: "kosgeb-category",
+      source_name: "KOSGEB Duyuruları",
+      title: "KOBİ dijital dönüşüm destek duyurusu",
+    }).category,
+    "Ulusal Destek ve Fonlar",
+  );
+});

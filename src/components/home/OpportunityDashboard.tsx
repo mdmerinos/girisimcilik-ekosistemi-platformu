@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { OpportunityCard } from "@/components/OpportunityCard";
 import { CategorySidebar } from "@/components/home/CategorySidebar";
+import { ContentViewTabs } from "@/components/home/ContentViewTabs";
 import { CountryFilterTabs } from "@/components/home/CountryFilterTabs";
 import { HomeHeader } from "@/components/home/HomeHeader";
 import {
@@ -19,6 +20,7 @@ import { TickerBar } from "@/components/home/TickerBar";
 import { TimeRangeTabs } from "@/components/home/TimeRangeTabs";
 import { TodayFilterTabs } from "@/components/home/TodayFilterTabs";
 import type { CountryGroup } from "@/lib/opportunities/countryGroup";
+import type { ContentView } from "@/lib/opportunities/opportunityQueryFilters";
 import type {
   StatFilter,
   TimeRange,
@@ -67,6 +69,7 @@ const PAGE_SIZE = 24;
 function buildParams(options: {
   page: number;
   category: string;
+  contentView: ContentView;
   countryGroup: CountryGroup;
   timeRange: TimeRange;
   today: TodayFilter;
@@ -82,6 +85,7 @@ function buildParams(options: {
     today: options.today,
     statFilter: options.statFilter,
     source: options.source,
+    view: options.contentView,
   });
   if (options.category !== "Tümü") params.set("category", options.category);
   if (options.query.trim()) params.set("q", options.query.trim());
@@ -93,6 +97,7 @@ export function OpportunityDashboard() {
   const [tickerItems, setTickerItems] = useState<Opportunity[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Tümü");
+  const [contentView, setContentView] = useState<ContentView>("all");
   const [countryGroup, setCountryGroup] = useState<CountryGroup>("all");
   const [timeRange, setTimeRange] = useState<TimeRange>("near");
   const [today, setToday] = useState<TodayFilter>("all");
@@ -224,6 +229,7 @@ export function OpportunityDashboard() {
       const params = buildParams({
         page: 1,
         category,
+        contentView,
         countryGroup,
         timeRange,
         today,
@@ -260,6 +266,7 @@ export function OpportunityDashboard() {
     };
   }, [
     category,
+    contentView,
     countryGroup,
     dataVersion,
     query,
@@ -274,6 +281,7 @@ export function OpportunityDashboard() {
     const params = buildParams({
       page: nextPage,
       category,
+      contentView,
       countryGroup,
       timeRange,
       today,
@@ -355,6 +363,14 @@ export function OpportunityDashboard() {
             ? "Gelecek çağrılar"
             : statFilter === "noDate"
               ? "Tarihi belirtilmemiş kayıtlar"
+              : contentView === "funding"
+                ? "Fırsatlar ve fonlar"
+                : contentView === "news"
+                  ? "Güncel haberler"
+                  : contentView === "investments"
+                    ? "Yatırım haberleri"
+                    : contentView === "programs"
+                      ? "Etkinlikler ve programlar"
               : timeRange === "near"
                 ? "Yakın fırsatlar"
                 : timeRange === "active"
@@ -386,6 +402,7 @@ export function OpportunityDashboard() {
           activeFilter={activeStatsCard}
           onFilterSelect={selectStatsFilter}
           category={category}
+          contentView={contentView}
           countryGroup={countryGroup}
           source={source}
           query={query}
@@ -395,7 +412,10 @@ export function OpportunityDashboard() {
             selected={category}
             counts={meta?.categoryCounts ?? {}}
             total={meta?.total ?? 0}
-            onChange={setCategory}
+            onChange={(nextCategory) => {
+              setCategory(nextCategory);
+              setContentView("all");
+            }}
           />
 
           <main id="firsatlar" className="min-w-0">
@@ -422,6 +442,17 @@ export function OpportunityDashboard() {
                   />
                 </div>
               </div>
+              <ContentViewTabs
+                value={contentView}
+                onChange={(nextView) => {
+                  setContentView(nextView);
+                  setCategory("Tümü");
+                  setTimeRange(nextView === "all" ? "near" : "all");
+                  setToday("all");
+                  setStatFilter("all");
+                  setActiveStatsCard(nextView === "all" ? "near" : null);
+                }}
+              />
               <TimeRangeTabs value={timeRange} onChange={changeTimeRange} />
               <TodayFilterTabs value={today} onChange={changeToday} />
               <p className="atlas-muted text-[10px]">

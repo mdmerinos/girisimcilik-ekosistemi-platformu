@@ -10,6 +10,7 @@ import {
 } from "@/lib/opportunities/opportunityFilters";
 import {
   CATEGORY_QUERY_FILTERS,
+  CONTENT_VIEWS,
   TODAY_QUERY_FILTERS,
   filterOpportunityRows,
   getCategoryCounts,
@@ -32,6 +33,7 @@ const querySchema = z.object({
     .enum(CATEGORY_QUERY_FILTERS)
     .optional()
     .transform(resolveCategoryFilter),
+  view: z.enum(CONTENT_VIEWS).default("all"),
   countryGroup: z.enum(COUNTRY_GROUPS).default("all"),
   timeRange: z.enum(TIME_RANGES).default("near"),
   today: z
@@ -77,6 +79,7 @@ function prepareResponse(
     limit,
     page,
     category,
+    view,
     countryGroup,
     timeRange,
     today,
@@ -91,6 +94,7 @@ function prepareResponse(
     rows,
     {
       countryGroup,
+      contentView: view,
       timeRange,
       today,
       statFilter,
@@ -132,6 +136,7 @@ function prepareResponse(
       today,
       statFilter,
       sourceFilter,
+      view,
       sourceWorkerStatus,
       query: q ?? "",
     },

@@ -61,7 +61,7 @@ export function hasArchiveSignal(item: FreshnessOpportunity): boolean {
       allContent,
     );
   const genericArchiveSignal =
-    /\b(gazete|basinda|kupur|arsiv)\b/.test(allContent);
+    /\b(gazete|basinda|medya|kupur|arsiv)\b/.test(allContent);
   const archiveUrlSignal =
     /\b(turkiye gazetesi|milliyet|sabah|gazete|basinda|medya|arsiv|kupur)\b/.test(
       urlContent,

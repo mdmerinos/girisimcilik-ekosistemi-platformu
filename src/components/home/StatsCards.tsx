@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { CountryGroup } from "@/lib/opportunities/countryGroup";
+import type { ContentView } from "@/lib/opportunities/opportunityQueryFilters";
 import type { OpportunityStats } from "@/lib/opportunities/opportunityStats";
 import type { OpportunitySource } from "@/lib/opportunities/opportunitySource";
 import { formatDateTime } from "@/lib/utils/formatDateTime";
@@ -46,6 +47,7 @@ type StatsCardsProps = {
   activeFilter: StatsCardFilter | null;
   onFilterSelect: (filter: StatsCardFilter) => void;
   category: string;
+  contentView: ContentView;
   countryGroup: CountryGroup;
   source: OpportunitySource;
   query: string;
@@ -56,6 +58,7 @@ export function StatsCards({
   activeFilter,
   onFilterSelect,
   category,
+  contentView,
   countryGroup,
   source,
   query,
@@ -63,13 +66,23 @@ export function StatsCards({
   const [stats, setStats] = useState<OpportunityStats>(EMPTY);
   const [available, setAvailable] = useState(false);
   const [loadedScopeKey, setLoadedScopeKey] = useState<string | null>(null);
-  const scopeKey = [category, countryGroup, source, query.trim()].join("::");
+  const scopeKey = [
+    category,
+    contentView,
+    countryGroup,
+    source,
+    query.trim(),
+  ].join("::");
   const statsAvailable = available && loadedScopeKey === scopeKey;
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const params = new URLSearchParams({ countryGroup, source });
+      const params = new URLSearchParams({
+        countryGroup,
+        source,
+        view: contentView,
+      });
       if (category !== "Tümü") params.set("category", category);
       if (query.trim()) params.set("q", query.trim());
 
@@ -98,7 +111,15 @@ export function StatsCards({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [category, countryGroup, query, refreshToken, scopeKey, source]);
+  }, [
+    category,
+    contentView,
+    countryGroup,
+    query,
+    refreshToken,
+    scopeKey,
+    source,
+  ]);
 
   const filterCards: Array<{
     filter: StatsCardFilter;

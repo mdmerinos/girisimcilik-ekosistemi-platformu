@@ -17,6 +17,7 @@ import {
 } from "@/lib/opportunities/opportunityFreshness";
 import {
   filterOpportunityRows,
+  matchesContentView,
   resolveCategoryFilter,
   resolveTodayFilter,
   type OpportunityQueryFilterOptions,
@@ -55,6 +56,43 @@ test("Turkish search normalization removes diacritics and punctuation", () => {
   assert.equal(
     normalizeSearchText("  TÜBİTAK, ODTÜ; yatırım / girişim!  "),
     "tubitak odtu yatirim girisim",
+  );
+});
+
+test("main content views map to the intended category groups", () => {
+  assert.equal(
+    matchesContentView(
+      opportunity({
+        unique_key: "funding-view",
+        category: "Uluslararası Fonlar",
+      }),
+      "funding",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesContentView(
+      opportunity({
+        unique_key: "news-view",
+        category: "Haber ve Sosyal Medya Akışı",
+      }),
+      "news",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesContentView(
+      opportunity({
+        unique_key: "investment-view",
+        category: "Yatırım ve Sermaye Ağları",
+      }),
+      "investments",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesContentView(opportunity({ unique_key: "program-view" }), "programs"),
+    true,
   );
 });
 

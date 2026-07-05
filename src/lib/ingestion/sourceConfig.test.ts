@@ -276,6 +276,69 @@ test("refresh-if-stale response does not expose secrets", () => {
   assert.equal(JSON.stringify(result).includes("SECRET"), false);
 });
 
+test("stage 3C ecosystem source inventory is configured with honest access modes", () => {
+  const expectedIds = [
+    "webrazzi-rss",
+    "egirisim-rss",
+    "startupcentrum-news",
+    "swipeline-rss",
+    "tubitak",
+    "kosgeb-announcements",
+    "itu-cekirdek",
+    "itu-ari-teknokent",
+    "odtu-teknokent",
+    "analiz-gazetesi",
+    "techcrunch-rss",
+    "crunchbase-news",
+    "eu-startups-rss",
+    "sifted-latest",
+    "reuters-technology",
+    "the-information",
+    "nato-diana",
+  ];
+  const byId = new Map(sourceConfigs.map((source) => [source.id, source]));
+
+  for (const id of expectedIds) assert.ok(byId.has(id), id);
+  for (const id of [
+    "crunchbase-news",
+    "sifted-latest",
+    "reuters-technology",
+    "the-information",
+  ]) {
+    assert.equal(byId.get(id)?.fragile, true, id);
+  }
+  for (const id of [
+    "webrazzi-rss",
+    "egirisim-rss",
+    "startupcentrum-news",
+    "swipeline-rss",
+    "eu-startups-rss",
+  ]) {
+    assert.equal(byId.get(id)?.kind, "rss", id);
+  }
+});
+
+test("Hacker News accepts strong startup funding signals and rejects funding alone", () => {
+  assert.equal(
+    classifyInvestmentCategory({
+      title: "Funding for a municipal road repair study",
+      sourceName: "Hacker News",
+      sourceId: "hacker-news-funding",
+      type: "investment",
+    }),
+    null,
+  );
+  assert.equal(
+    classifyInvestmentCategory({
+      title: "AI startup raises $15M in seed funding",
+      sourceName: "Hacker News",
+      sourceId: "hacker-news-funding",
+      type: "investment",
+    }),
+    INVESTMENT_CATEGORY,
+  );
+});
+
 test("force refresh bypasses freshness but preserves the global cooldown", () => {
   const now = new Date("2026-07-03T12:00:00.000Z");
 

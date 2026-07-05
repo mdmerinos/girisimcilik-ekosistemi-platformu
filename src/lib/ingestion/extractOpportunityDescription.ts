@@ -15,6 +15,8 @@ const DETAIL_SOURCE_IDS = new Set([
   "kosgeb-supports",
   "tubitak",
   "tubitak-bigg",
+  "itu-ari-teknokent",
+  "analiz-gazetesi",
 ]);
 const MAX_DETAIL_REQUESTS_PER_SOURCE = 16;
 const DETAIL_CONCURRENCY = 4;

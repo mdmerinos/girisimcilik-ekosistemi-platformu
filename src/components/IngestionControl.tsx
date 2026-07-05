@@ -179,6 +179,21 @@ export function IngestionControl() {
       };
     }) ??
     [];
+  const healthSummary = {
+    producing: visibleLogs.filter(
+      (log) =>
+        (log.status === "success" || log.status === "partial") &&
+        log.collected > 0,
+    ).length,
+    publicLimited: visibleLogs.filter((log) =>
+      ["fragile", "skipped"].includes(log.status),
+    ).length,
+    workerRequired: visibleLogs.filter((log) =>
+      ["nato-diana", "odtu-teknokent"].includes(log.sourceId),
+    ).length,
+    newData: visibleLogs.filter((log) => log.inserted > 0).length,
+    filtered: visibleLogs.reduce((sum, log) => sum + log.skipped, 0),
+  };
 
   const sourceRows = sourceCatalog.map((source) => {
     const latestRun = runs.find((run) =>
@@ -494,6 +509,25 @@ export function IngestionControl() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {visibleLogs.length > 0 && (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            ["Veri üreten kaynaklar", healthSummary.producing],
+            ["Public erişimde sınırlı", healthSummary.publicLimited],
+            ["Worker isteyen", healthSummary.workerRequired],
+            ["Yeni kayıt getiren", healthSummary.newData],
+            ["Arşiv/gürültü nedeniyle elenen", healthSummary.filtered],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl bg-[#f5f7f3] p-3">
+              <p className="text-xs text-[#748078]">{label}</p>
+              <p className="mt-1 text-xl font-semibold text-[#142219]">
+                {value}
+              </p>
+            </div>
+          ))}
         </div>
       )}
 

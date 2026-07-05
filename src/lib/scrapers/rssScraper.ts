@@ -58,6 +58,11 @@ function absoluteImageUrl(
     : null;
 }
 
+function firstHtmlImage(value: string | undefined): string | null {
+  if (!value) return null;
+  return value.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] ?? null;
+}
+
 export async function scrapeRss({
   feedUrl,
   sourceName,
@@ -88,7 +93,9 @@ export async function scrapeRss({
       const imageUrl = absoluteImageUrl(
         mediaFieldUrl(item.mediaContent) ??
           mediaFieldUrl(item.mediaThumbnail) ??
-          item.enclosure?.url,
+          item.enclosure?.url ??
+          firstHtmlImage(item.content) ??
+          firstHtmlImage(item.summary),
         normalizedUrl,
       );
 

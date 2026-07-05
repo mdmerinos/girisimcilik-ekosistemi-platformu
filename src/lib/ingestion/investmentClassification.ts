@@ -4,6 +4,9 @@ import type { OpportunityCategory, OpportunityInput } from "@/types/opportunity"
 export const INVESTMENT_CATEGORY: OpportunityCategory =
   "Yatırım ve Sermaye Ağları";
 export const NEWS_CATEGORY: OpportunityCategory = "Haber ve Sosyal Medya Akışı";
+export const PROGRAM_CATEGORY: OpportunityCategory = "Etkinlik ve Programlar";
+export const NATIONAL_FUNDING_CATEGORY: OpportunityCategory =
+  "Ulusal Destek ve Fonlar";
 
 const DIRECT_INVESTMENT_SIGNALS = [
   "yatırım aldı",
@@ -164,6 +167,29 @@ const EXCLUDED_WITHOUT_ECOSYSTEM_CONTEXT = [
   /\byatirim tavsiyesi\b/i,
 ] as const;
 
+const PROGRAM_SIGNALS = [
+  "hızlandırıcı",
+  "hizlandirici",
+  "accelerator",
+  "program",
+  "başvuru",
+  "basvuru",
+  "demo day",
+  "webinar",
+  "zirve",
+  "summit",
+  "etkinlik",
+  "kuluçka",
+  "kulucka",
+  "çağrı açıldı",
+  "cagri acildi",
+  "başvurular başladı",
+  "basvurular basladi",
+] as const;
+
+const NATIONAL_SOURCE_PATTERN =
+  /\b(?:tubitak|kosgeb|kalkinma[-\s]*ajansi|yatirima[-\s]*destek)\b/i;
+
 function searchable(value: string): string {
   return normalizeText(value)
     .toLocaleLowerCase("tr-TR")
@@ -213,19 +239,29 @@ export function hasStrictInvestmentSignal(
     pattern.test(content),
   );
   const isNoisyHnInvestmentSource =
-    /hacker[-\s/]*news[-\s/]*(?:funding|venture[-\s/]*capital)/i.test(
-      sourceContext,
-    );
+    /hacker[-\s/]*news/i.test(sourceContext);
   const isTechCrunchFundingSource = /techcrunch[-\s/]*funding[-\s/]*rss/i.test(
     sourceContext,
   );
+  const hasStrongHnSignal =
+    /\bstartup\b.{0,80}\b(?:funding|raises?|raised|acquisition)\b/i.test(
+      content,
+    ) ||
+    /\b(?:funding|raises?|raised)\b.{0,80}\bstartup\b/i.test(content) ||
+    /\b(?:vc|seed round|pre-seed|venture|ai startup|saas funding|accelerator|startup acquisition)\b/i.test(
+      content,
+    );
 
   if (!hasDirectSignal && !hasBroadTerm) return false;
   if (hasExcludedPattern && !hasDirectSignal && !hasEcosystemContext) {
     return false;
   }
 
-  if (isNoisyHnInvestmentSource || isTechCrunchFundingSource) {
+  if (isNoisyHnInvestmentSource) {
+    return hasStrongHnSignal && !hasExcludedPattern;
+  }
+
+  if (isTechCrunchFundingSource) {
     return hasDirectSignal && (hasEcosystemContext || hasMoneyAmount(content));
   }
 
@@ -248,6 +284,12 @@ export function applyInvestmentCategoryPriority(
   opportunity: OpportunityInput,
   context: Pick<InvestmentClassificationInput, "sourceId" | "type"> = {},
 ): OpportunityInput {
+  const content = searchable(
+    [opportunity.title, opportunity.summary].filter(Boolean).join(" "),
+  );
+  const sourceContext = searchable(
+    [opportunity.source_name, context.sourceId].filter(Boolean).join(" "),
+  );
   const category = classifyInvestmentCategory({
     title: opportunity.title,
     summary: opportunity.summary,
@@ -258,6 +300,12 @@ export function applyInvestmentCategoryPriority(
   });
 
   if (category) return { ...opportunity, category };
+  if (NATIONAL_SOURCE_PATTERN.test(sourceContext)) {
+    return { ...opportunity, category: NATIONAL_FUNDING_CATEGORY };
+  }
+  if (includesKeyword(content, PROGRAM_SIGNALS)) {
+    return { ...opportunity, category: PROGRAM_CATEGORY };
+  }
   if (opportunity.category === INVESTMENT_CATEGORY) {
     return { ...opportunity, category: NEWS_CATEGORY };
   }

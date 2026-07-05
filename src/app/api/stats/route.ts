@@ -8,6 +8,7 @@ import {
 } from "@/lib/opportunities/opportunityFilters";
 import {
   CATEGORY_QUERY_FILTERS,
+  CONTENT_VIEWS,
   TODAY_QUERY_FILTERS,
   filterOpportunityRows,
   resolveCategoryFilter,
@@ -31,6 +32,7 @@ const querySchema = z.object({
     .enum(CATEGORY_QUERY_FILTERS)
     .optional()
     .transform(resolveCategoryFilter),
+  view: z.enum(CONTENT_VIEWS).default("all"),
   countryGroup: z.enum(COUNTRY_GROUPS).default("all"),
   timeRange: z.enum(TIME_RANGES).default("all"),
   today: z
@@ -122,6 +124,7 @@ export async function GET(request: NextRequest) {
       opportunities,
       {
         ...parsed.data,
+        contentView: parsed.data.view,
         query: parsed.data.q,
       },
       now,

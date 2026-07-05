@@ -50,6 +50,14 @@ export const CATEGORY_QUERY_FILTERS = [
   ...CATEGORY_FILTER_CODES,
 ] as const;
 export type CategoryQueryFilter = (typeof CATEGORY_QUERY_FILTERS)[number];
+export const CONTENT_VIEWS = [
+  "all",
+  "funding",
+  "news",
+  "investments",
+  "programs",
+] as const;
+export type ContentView = (typeof CONTENT_VIEWS)[number];
 
 const CATEGORY_BY_CODE: Record<CategoryFilterCode, OpportunityCategory> = {
   "ULS-FON": "Ulusal Destek ve Fonlar",
@@ -75,6 +83,7 @@ export function resolveCategoryFilter(
 
 export type OpportunityQueryFilterOptions = {
   category?: OpportunityCategory;
+  contentView?: ContentView;
   countryGroup: CountryGroup;
   timeRange: TimeRange;
   today: TodayFilter;
@@ -82,6 +91,26 @@ export type OpportunityQueryFilterOptions = {
   source: OpportunitySource;
   query?: string;
 };
+
+export function matchesContentView(
+  item: Pick<Opportunity, "category">,
+  contentView: ContentView = "all",
+): boolean {
+  if (contentView === "all") return true;
+  if (contentView === "funding") {
+    return (
+      item.category === "Ulusal Destek ve Fonlar" ||
+      item.category === "Uluslararası Fonlar"
+    );
+  }
+  if (contentView === "news") {
+    return item.category === "Haber ve Sosyal Medya Akışı";
+  }
+  if (contentView === "investments") {
+    return item.category === "Yatırım ve Sermaye Ağları";
+  }
+  return item.category === "Etkinlik ve Programlar";
+}
 
 function isAllowedOpportunity(item: Opportunity): boolean {
   if (item.category !== INVESTMENT_CATEGORY) return true;
@@ -101,6 +130,7 @@ export function filterOpportunityRows(
   return rows
     .map(sanitizeNasaSbirOpportunityDates)
     .filter(isAllowedOpportunity)
+    .filter((item) => matchesContentView(item, options.contentView))
     .filter((item) => matchesCountryGroup(item.location, options.countryGroup))
     .filter(
       (item) =>

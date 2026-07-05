@@ -35,6 +35,16 @@ const defaultDependencies: IngestSourceDependencies = {
   writeLog: writeSourceLog,
 };
 
+function titleSourceIdentity(item: OpportunityInput): string {
+  return `${item.source_name}::${item.title}`
+    .normalize("NFKD")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export class IngestionAlreadyRunningError extends Error {
   constructor(public readonly runId: string) {
     super("Ingestion is already running.");
@@ -124,7 +134,9 @@ export async function ingestSource(
       }
 
       const uniqueItems = [
-        ...new Map(normalized.map((item) => [item.unique_key, item])).values(),
+        ...new Map(
+          normalized.map((item) => [titleSourceIdentity(item), item]),
+        ).values(),
       ];
       const duplicateCount = normalized.length - uniqueItems.length;
       const upsert = await dependencies.upsert(uniqueItems);
@@ -135,7 +147,8 @@ export async function ingestSource(
             ? "skipped"
             : invalidCount > 0 ||
                 relevanceSkippedCount > 0 ||
-                freshnessSkippedCount > 0
+                freshnessSkippedCount > 0 ||
+                duplicateCount > 0
             ? "partial"
             : "success";
 
