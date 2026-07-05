@@ -68,12 +68,16 @@ export function hasArchiveSignal(item: FreshnessOpportunity): boolean {
     );
   const officialMediaSignal =
     officialSource && /\bmedya\b/.test(textContent);
+  const undatedOldYearSignal =
+    !item.published_at &&
+    /\b(?:19\d{2}|200\d|201\d|202[0-4])\b/.test(textContent);
 
   return (
     strongArchiveSignal ||
     genericArchiveSignal ||
     archiveUrlSignal ||
-    officialMediaSignal
+    officialMediaSignal ||
+    undatedOldYearSignal
   );
 }
 

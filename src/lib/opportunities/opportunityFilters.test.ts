@@ -203,6 +203,66 @@ test("undated Milliyet and Sabah press records stay out of default flows", () =>
   assert.equal(getOpportunityStatus(milliyet, now), "Eski arşiv kaydı");
 });
 
+test("undated ODTÜ news with an old year stays out of current views", () => {
+  const oldOdtuNews = opportunity({
+    unique_key: "odtu-undated-2021",
+    title:
+      "ASELSAN ile Teknokent Savunma Sanayi Kümelenmesi-TSSK arasında İş birliği Protokolü imzalandı",
+    summary: "Etkinlik ATO Congressium’da 9-12 Haziran 2021 tarihlerinde düzenlendi.",
+    source_name: "ODTÜ Teknokent",
+    category: "Haber ve Sosyal Medya Akışı",
+    published_at: null,
+    deadline_at: null,
+  });
+
+  assert.equal(hasArchiveSignal(oldOdtuNews), true);
+  assert.equal(matchesTimeRange(oldOdtuNews, "near", now), false);
+  assert.equal(matchesTimeRange(oldOdtuNews, "active", now), false);
+  assert.equal(matchesTimeRange(oldOdtuNews, "all", now), true);
+  assert.equal(getOpportunityStatus(oldOdtuNews, now), "Eski arşiv kaydı");
+  assert.equal(
+    filterOpportunityRows(
+      [oldOdtuNews],
+      { ...queryDefaults, contentView: "news" },
+      now,
+    ).length,
+    0,
+  );
+  assert.deepEqual(
+    selectTickerItems([oldOdtuNews], now),
+    [],
+  );
+});
+
+test("an active deadline overrides an undated old-year text signal", () => {
+  const activeCall = opportunity({
+    unique_key: "active-deadline-old-year-reference",
+    title: "2024 sonuçlarından geliştirilen yeni girişim programı",
+    summary: "Başvurular yeni dönem için devam ediyor.",
+    published_at: null,
+    deadline_at: "2026-10-01T00:00:00.000Z",
+  });
+
+  assert.equal(matchesTimeRange(activeCall, "near", now), true);
+  assert.equal(getOpportunityStatus(activeCall, now), "Başvuruya açık");
+});
+
+test("current Webrazzi and eGirişim news without old-year signals stay visible", () => {
+  for (const source_name of ["Webrazzi", "egirişim"]) {
+    const currentNews = opportunity({
+      unique_key: `current-${source_name}`,
+      title: "Yapay zeka girişimi yeni ürününü duyurdu",
+      summary: "Güncel teknoloji ve startup ekosistemi haberi.",
+      source_name,
+      category: "Haber ve Sosyal Medya Akışı",
+      published_at: "2026-07-05T09:00:00.000Z",
+    });
+
+    assert.equal(matchesTimeRange(currentNews, "near", now), true);
+    assert.equal(hasArchiveSignal(currentNews), false);
+  }
+});
+
 test("current official calls and active deadlines are preserved", () => {
   const recentKosgeb = opportunity({
     unique_key: "kosgeb-current",

@@ -25,6 +25,7 @@ import {
   type Opportunity,
   type OpportunityCategory,
 } from "@/types/opportunity";
+import { isOldArchiveOpportunity } from "@/lib/opportunities/opportunityFreshness";
 
 export const TODAY_QUERY_FILTERS = [
   "all",
@@ -131,6 +132,12 @@ export function filterOpportunityRows(
     .map(sanitizeNasaSbirOpportunityDates)
     .filter(isAllowedOpportunity)
     .filter((item) => matchesContentView(item, options.contentView))
+    .filter(
+      (item) =>
+        !options.contentView ||
+        options.contentView === "all" ||
+        !isOldArchiveOpportunity(item, now),
+    )
     .filter((item) => matchesCountryGroup(item.location, options.countryGroup))
     .filter(
       (item) =>
