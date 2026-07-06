@@ -35,6 +35,7 @@ export type SourceIngestionResult = {
       duplicate: number;
     };
     upserted: number;
+    reason: string;
     newestPublishedAt: string | null;
     newestTitles: string[];
     freshness: "last24Hours" | "last7Days" | "last30Days" | "older" | "unknown";
@@ -251,8 +252,8 @@ export async function getIngestionAdminStats() {
     latestRunStatus: latestRun?.status ?? null,
     runningIngestion: Boolean(runningRun),
     cronEnabled: true,
-    cronSchedule: "0 6 * * *",
-    cronScheduleDescription: "Her gün yaklaşık Türkiye saatiyle 09:00",
+    cronSchedule: "0 * * * *",
+    cronScheduleDescription: "Saatte bir; manuel Yenile aynı kaynak setini hemen çalıştırır",
     sourceStatusCounts,
   };
 }

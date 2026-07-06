@@ -7,6 +7,19 @@ type PublicSourceResult = {
   collected: number;
   inserted: number;
   updated: number;
+  skipped: number;
+  diagnostics?: {
+    raw: number;
+    accepted: number;
+    filtered: {
+      archive: number;
+      old: number;
+      relevance: number;
+      invalid: number;
+      duplicate: number;
+    };
+    reason: string;
+  };
   error: string | null;
   workerRequired: boolean;
 };
@@ -43,6 +56,7 @@ function sourceMessage(source: PublicSourceResult): string {
     return "Normal fetch bot korumasına takılabilir; harici worker ayarı gerekiyor.";
   }
   if (source.error) return source.error;
+  if (source.diagnostics?.reason) return source.diagnostics.reason;
   if (source.status === "empty") {
     return "Bu kaynak geçici olarak veri döndürmedi.";
   }
@@ -98,6 +112,14 @@ export function RefreshStatus({ state }: { state: RefreshState | null }) {
                   <p className="atlas-muted mt-1 leading-5">
                     {sourceMessage(source)}
                   </p>
+                  {source.diagnostics && (
+                    <p className="atlas-muted mt-2 leading-5">
+                      Ham {source.diagnostics.raw}, kabul{" "}
+                      {source.diagnostics.accepted}, yeni {source.inserted},
+                      duplicate {source.diagnostics.filtered.duplicate},
+                      elenen {source.skipped}.
+                    </p>
+                  )}
                 </article>
               ))}
             </div>

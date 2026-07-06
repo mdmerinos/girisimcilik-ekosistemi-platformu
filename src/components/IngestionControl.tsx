@@ -35,6 +35,7 @@ type SourceResult = {
       duplicate: number;
     };
     upserted: number;
+    reason: string;
     newestPublishedAt: string | null;
     newestTitles: string[];
     freshnessMessage: string;
@@ -554,6 +555,9 @@ export function IngestionControl() {
                         <p className="mt-1 text-[11px] text-[#748078]">
                           HTTP {diagnostics.httpStatus ?? "—"} ·{" "}
                           {diagnostics.freshnessMessage}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[#748078]">
+                          Sebep: {diagnostics.reason}
                         </p>
                         {diagnostics.fallbackStatus !== "not_configured" && (
                           <p className="mt-1 text-[11px] text-[#748078]">

@@ -225,8 +225,8 @@ test("refresh-if-stale decision handles freshness and duplicate protection", () 
   assert.equal(
     decideRefreshIfStale({
       now,
-      lastSuccessfulIngestionAt: "2026-07-03T06:00:00.000Z",
-      lastAttemptAt: "2026-07-03T06:00:00.000Z",
+      lastSuccessfulIngestionAt: "2026-07-03T11:30:00.000Z",
+      lastAttemptAt: "2026-07-03T11:30:00.000Z",
       isRunning: false,
     }).status,
     "fresh",
@@ -386,14 +386,43 @@ test("manual refresh source set includes the new ecosystem news sources", () => 
     "egirisim-rss",
     "startupcentrum-news",
     "techcrunch-rss",
+    "techcrunch-startups-rss",
+    "techcrunch-funding-rss",
+    "eu-startups-rss",
     "tubitak",
+    "tubitak-bigg",
     "kosgeb-announcements",
+    "kosgeb-supports",
+    "itu-ari-teknokent",
+    "odtu-teknokent",
+    "nato-diana",
   ]) {
     assert.equal(
       sourceConfigs.find((source) => source.id === id)?.enabled,
       true,
       id,
     );
+  }
+});
+
+test("cron and manual ingestion use the same enabled source inventory", () => {
+  const enabledIds = sourceConfigs
+    .filter((source) => source.enabled)
+    .map((source) => source.id);
+
+  for (const id of [
+    "webrazzi-rss",
+    "egirisim-rss",
+    "startupcentrum-news",
+    "techcrunch-rss",
+    "eu-startups-rss",
+    "tubitak",
+    "kosgeb-announcements",
+    "odtu-teknokent",
+    "nato-diana",
+    "itu-ari-teknokent",
+  ]) {
+    assert.ok(enabledIds.includes(id), id);
   }
 });
 
@@ -476,6 +505,7 @@ test("public refresh result exposes source counts without secrets", () => {
   assert.equal(result.totals.successfulSources, 1);
   assert.equal(result.totals.issueSources, 1);
   assert.equal(result.sources[1].workerRequired, true);
+  assert.equal(result.sources[0].skipped, 0);
   assert.equal(JSON.stringify(result).includes("SECRET"), false);
 });
 

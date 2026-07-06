@@ -1,4 +1,4 @@
-export const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = 60 * 60 * 1000;
 export const REFRESH_COOLDOWN_MS = 30 * 60 * 1000;
 
 export type RefreshIfStaleStatus =

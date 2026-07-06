@@ -43,7 +43,7 @@ export async function refreshIfStale(
         ...decision,
         status: "completed",
         lastSuccessfulIngestionAt: new Date().toISOString(),
-        message: "Yenileme tamamlandı.",
+        message: `Kaynaklar kontrol edildi: ${result.sources.length} kaynak, ${result.totals.inserted} yeni kayıt, ${result.totals.updated} güncelleme.`,
         result: toPublicIngestionResult(result),
       };
     }

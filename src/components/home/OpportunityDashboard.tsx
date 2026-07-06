@@ -76,7 +76,28 @@ type TickerApiResponse = {
   meta: { source: "supabase" | "fallback" };
 };
 
+type RecentApiResponse = {
+  data: Array<{
+    id: string;
+    title: string;
+    source_name: string;
+    category: string;
+    created_at: string;
+    published_at: string | null;
+    source_url: string;
+    application_url: string | null;
+    contentView: ContentView;
+  }>;
+  meta: {
+    source: "supabase" | "fallback";
+    count: number;
+    since: string;
+    view: ContentView;
+  };
+};
+
 const PAGE_SIZE = 24;
+const RECENT_POLL_MS = 3 * 60 * 1000;
 
 function buildParams(options: {
   page: number;
@@ -125,6 +146,12 @@ export function OpportunityDashboard() {
   const [refreshLabel, setRefreshLabel] = useState<string>();
   const [refreshState, setRefreshState] = useState<RefreshState | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [recentNotice, setRecentNotice] = useState<{
+    count: number;
+    since: string;
+  } | null>(null);
+  const lastDataAddedAt = meta?.lastDataAddedAt ?? null;
+  const metaSource = meta?.source ?? null;
 
   async function forceRefresh() {
     setRefreshing(true);
@@ -234,6 +261,47 @@ export function OpportunityDashboard() {
 
     return () => controller.abort();
   }, [dataVersion]);
+
+  useEffect(() => {
+    if (!lastDataAddedAt || metaSource !== "supabase") return;
+
+    const controller = new AbortController();
+    const since = lastDataAddedAt;
+
+    async function checkRecent() {
+      const params = new URLSearchParams({
+        since,
+        limit: "20",
+        view: contentView,
+      });
+      try {
+        const response = await fetch(`/api/opportunities/recent?${params}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as RecentApiResponse;
+        if (payload.meta.source !== "supabase" || payload.meta.count === 0) {
+          setRecentNotice(null);
+          return;
+        }
+        setRecentNotice({
+          count: payload.meta.count,
+          since: payload.meta.since,
+        });
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    const interval = window.setInterval(() => void checkRecent(), RECENT_POLL_MS);
+    return () => {
+      window.clearInterval(interval);
+      controller.abort();
+    };
+  }, [contentView, lastDataAddedAt, metaSource]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -361,6 +429,20 @@ export function OpportunityDashboard() {
     });
   }
 
+  function showRecentRecords() {
+    setRecentNotice(null);
+    setToday("ingested");
+    setTimeRange("all");
+    setStatFilter("all");
+    setActiveStatsCard("ingested");
+    setDataVersion((value) => value + 1);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("firsatlar")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   const selectedSourceLabel =
     OPPORTUNITY_SOURCE_OPTIONS.find((option) => option.value === source)
       ?.label ?? "Bu kaynak";
@@ -475,6 +557,18 @@ export function OpportunityDashboard() {
             </div>
 
             <RefreshStatus state={refreshState} />
+
+            {recentNotice && (
+              <button
+                type="button"
+                onClick={showRecentRecords}
+                className="atlas-refresh mt-4 rounded-full px-4 py-2 text-xs font-bold text-white"
+                aria-live="polite"
+                title={`Son kontrol: ${recentNotice.since}`}
+              >
+                {recentNotice.count} yeni kayıt var
+              </button>
+            )}
 
             {meta?.source === "fallback" && (
               <p className="atlas-warning mt-4 rounded-xl px-4 py-3 text-xs">

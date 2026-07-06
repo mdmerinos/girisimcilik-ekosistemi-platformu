@@ -51,6 +51,21 @@ export function buildSourceDiagnostics(options: {
           : freshness === "last30Days"
             ? "Son 30 günde yayımlanmış kayıt döndü."
             : (options.staleMessage ?? "Kaynak güncel kayıt döndürmedi."));
+  const filteredTotal = Object.values(options.filtered).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  const reason =
+    options.fallbackMessage ??
+    (options.collected.length === 0
+      ? (options.staleMessage ?? "Kaynakta bu taramada yeni/güncel kayıt bulunamadı.")
+      : options.inserted === 0 && options.updated > 0
+        ? "Kayıtlar daha önce eklenmiş; duplicate/güncelleme olarak işlendi."
+        : options.inserted === 0 && filteredTotal > 0
+          ? "Kayıtlar filtrelerle elendi veya duplicate olarak sayıldı."
+          : options.inserted > 0
+            ? "Yeni kayıt Supabase'e yazıldı."
+            : freshnessMessage);
   const acceptedCategories = options.accepted.reduce<Record<string, number>>(
     (counts, item) => ({
       ...counts,
@@ -67,6 +82,7 @@ export function buildSourceDiagnostics(options: {
     accepted: options.accepted.length,
     filtered: options.filtered,
     upserted: options.inserted + options.updated,
+    reason,
     newestPublishedAt,
     newestTitles: [
       ...dated,

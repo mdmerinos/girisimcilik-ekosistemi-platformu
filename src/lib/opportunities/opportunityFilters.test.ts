@@ -24,6 +24,7 @@ import {
   type OpportunityQueryFilterOptions,
 } from "@/lib/opportunities/opportunityQueryFilters";
 import { calculateOpportunityStats } from "@/lib/opportunities/opportunityStats";
+import { selectRecentOpportunities } from "@/lib/opportunities/recentOpportunities";
 import { selectTickerItems } from "@/lib/opportunities/opportunityTicker";
 import { formatDateTime } from "@/lib/utils/formatDateTime";
 import type { Opportunity } from "@/types/opportunity";
@@ -534,6 +535,90 @@ test("stored news and investment records remain visible in their content views",
     new Date("2026-07-05T12:00:00.000Z"),
   );
   assert.equal(diagnostics.hiddenByContentView, 1);
+});
+
+test("content views keep ecosystem news, investments and programs visible", () => {
+  const rows = [
+    opportunity({
+      unique_key: "webrazzi-news",
+      title: "Webrazzi guncel teknoloji haberi",
+      category: "Haber ve Sosyal Medya Akışı",
+      source_name: "Webrazzi",
+      published_at: "2026-07-04T09:00:00.000Z",
+    }),
+    opportunity({
+      unique_key: "webrazzi-investment",
+      title: "Yerli girisim 5 milyon dolar yatirim aldi",
+      summary: "Startup seed funding round.",
+      category: "Yatırım ve Sermaye Ağları",
+      source_name: "Webrazzi",
+      published_at: "2026-07-04T09:30:00.000Z",
+    }),
+    opportunity({
+      unique_key: "tubitak-program",
+      title: "TUBITAK BIGG girisimcilik programi basvurulari",
+      category: "Etkinlik ve Programlar",
+      source_name: "TÃœBÄ°TAK BÄ°GG",
+      published_at: "2026-07-04T10:00:00.000Z",
+    }),
+  ];
+
+  assert.deepEqual(
+    filterOpportunityRows(rows, { ...queryDefaults, contentView: "news" }, now)
+      .map((item) => item.unique_key),
+    ["webrazzi-news"],
+  );
+  assert.deepEqual(
+    filterOpportunityRows(
+      rows,
+      { ...queryDefaults, contentView: "investments" },
+      now,
+    ).map((item) => item.unique_key),
+    ["webrazzi-investment"],
+  );
+  assert.deepEqual(
+    filterOpportunityRows(
+      rows,
+      { ...queryDefaults, contentView: "programs" },
+      now,
+    ).map((item) => item.unique_key),
+    ["tubitak-program"],
+  );
+});
+
+test("recent records use created_at and never promote old archives", () => {
+  const current = opportunity({
+    unique_key: "recent-current",
+    title: "TechCrunch startup funding news",
+    category: "Yatırım ve Sermaye Ağları",
+    source_name: "TechCrunch",
+    created_at: "2026-07-04T11:50:00.000Z",
+    published_at: "2026-07-04T09:00:00.000Z",
+  });
+  const olderCreated = opportunity({
+    unique_key: "recent-older-created",
+    created_at: "2026-07-04T09:00:00.000Z",
+    published_at: "2026-07-04T08:00:00.000Z",
+  });
+  const archive = opportunity({
+    unique_key: "recent-archive",
+    title: "TÃ¼rkiye Gazetesi eski haber kupuru",
+    summary: "Devami icin arsiv",
+    source_name: "KOSGEB DuyurularÄ±",
+    source_url: "https://www.kosgeb.gov.tr/arsiv/eski",
+    created_at: "2026-07-04T11:55:00.000Z",
+    published_at: null,
+    deadline_at: null,
+  });
+
+  assert.deepEqual(
+    selectRecentOpportunities([archive, olderCreated, current], {
+      since: new Date("2026-07-04T11:00:00.000Z"),
+      contentView: "investments",
+      now,
+    }).map((item) => item.unique_key),
+    ["recent-current"],
+  );
 });
 
 test("stats card counts and list totals share every query filter", () => {
