@@ -405,6 +405,55 @@ test("manual refresh source set includes the new ecosystem news sources", () => 
   }
 });
 
+test("stage 4 technopark source inventory exposes group and access metadata", () => {
+  const byId = new Map(sourceConfigs.map((source) => [source.id, source]));
+  const expectedTechnoparkIds = [
+    "innopark-events",
+    "innopark-incubation-programs",
+    "innopark-tto-supports",
+    "innopark-info-program",
+    "itu-ari-teknokent",
+    "odtu-teknokent",
+    "yildiz-teknopark",
+    "teknopark-istanbul",
+    "bilisim-vadisi",
+    "bilkent-cyberpark",
+    "hacettepe-teknokent",
+    "gazi-teknopark",
+    "ankara-universitesi-teknokent",
+    "antalya-teknokent",
+    "ege-teknopark",
+    "depark",
+    "erciyes-teknopark",
+    "ulutek-teknopark",
+    "marmara-teknokent",
+    "konya-teknokent",
+    "mersin-teknopark",
+    "teknopark-izmir",
+    "trabzon-teknokent",
+    "entertech-istanbul-teknokent",
+    "ostim-teknopark",
+    "teknopark-ankara",
+    "ata-teknokent",
+    "bursa-teknopark",
+    "samsun-teknopark",
+    "van-teknokent",
+    "tgbd-member-announcements",
+  ];
+
+  for (const id of expectedTechnoparkIds) {
+    const source = byId.get(id);
+    assert.ok(source, id);
+    assert.equal(source?.enabled, true, id);
+    assert.equal(source?.sourceGroup, "technopark", id);
+    assert.ok(["html", "fragile"].includes(source?.accessMode ?? ""), id);
+  }
+
+  assert.equal(byId.get("innopark-events")?.fragile, false);
+  assert.equal(byId.get("innopark-info-program")?.accessMode, "fragile");
+  assert.equal(byId.get("teknopark-istanbul")?.accessMode, "fragile");
+});
+
 test("cron and manual ingestion use the same enabled source inventory", () => {
   const enabledIds = sourceConfigs
     .filter((source) => source.enabled)

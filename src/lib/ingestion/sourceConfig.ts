@@ -32,6 +32,8 @@ import type {
 } from "@/types/opportunity";
 
 export type SourceKind = "rss" | "html" | "api";
+export type SourceGroup = "technopark";
+export type SourceAccessMode = SourceKind | "fragile";
 export type OpportunityType =
   | "funding"
   | "investment"
@@ -44,6 +46,8 @@ export type SourceConfig = {
   id: string;
   name: string;
   kind: SourceKind;
+  sourceGroup?: SourceGroup;
+  accessMode?: SourceAccessMode;
   url: string;
   fetchUrls?: string[];
   enabled: boolean;
@@ -148,6 +152,54 @@ function htmlSource(options: HtmlSourceOptions): SourceConfig {
 
 function configuredSource(source: SourceConfig): SourceConfig {
   return source;
+}
+
+type TechnoparkHtmlInventoryItem = {
+  id: string;
+  name: string;
+  url: string;
+  fragile?: boolean;
+  category?: OpportunityCategory;
+  opportunityType?: OpportunityType;
+  notes?: string;
+  itemSelector?: string;
+  linkPattern: RegExp;
+  excludeLinkPattern?: RegExp;
+  maxItems?: number;
+};
+
+function technoparkHtmlSource(
+  source: TechnoparkHtmlInventoryItem,
+): SourceConfig {
+  return htmlSource({
+    id: source.id,
+    name: source.name,
+    url: source.url,
+    fragile: source.fragile ?? true,
+    sourceGroup: "technopark",
+    accessMode: (source.fragile ?? true) ? "fragile" : "html",
+    category: source.category ?? "Etkinlik ve Programlar",
+    opportunityType: source.opportunityType ?? "program",
+    country: "Türkiye",
+    notes:
+      source.notes ??
+      "TGBD üyesi teknopark public duyuru/haber/program sayfası; erişim kısıtı varsa fragile raporlanır.",
+    scraper: {
+      itemSelector:
+        source.itemSelector ??
+        'main article a[href], main .card a[href], main .post a[href], #content a[href], a[href*="duyuru"], a[href*="haber"], a[href*="etkinlik"], a[href*="program"], a[href*="basvuru"]',
+      linkPattern: source.linkPattern,
+      excludeLinkPattern:
+        source.excludeLinkPattern ??
+        /\/(?:kategori|category|etiket|tag|author|yazar|arama|search|login|giris|iletisim|contact|kurumsal|hakkimizda|about)(?:\/|$)/i,
+      containerSelector:
+        "article, .card, .post, .news, .news-item, .duyuru, .event, .etkinlik, li, tr, section, div",
+      titleSelector: "h1, h2, h3, h4, h5, .title, .baslik",
+      summarySelector: "p, .summary, .description, .excerpt, td",
+      dateSelector: "time, .date, .tarih, .published, td",
+      maxItems: source.maxItems ?? 40,
+    },
+  });
 }
 
 export const sourceConfigs: SourceConfig[] = [
@@ -509,6 +561,8 @@ export const sourceConfigs: SourceConfig[] = [
     name: "İTÜ ARI Teknokent",
     url: "https://www.ariteknokent.com.tr/tr/haberler",
     fragile: false,
+    sourceGroup: "technopark",
+    accessMode: "html",
     category: "Haber ve Sosyal Medya Akışı",
     opportunityType: "news",
     country: "Türkiye",
@@ -528,6 +582,8 @@ export const sourceConfigs: SourceConfig[] = [
     id: "odtu-teknokent",
     name: "ODTÜ Teknokent",
     kind: "html",
+    sourceGroup: "technopark",
+    accessMode: "fragile",
     url: "https://www.odtuteknokent.com.tr/tr/",
     enabled: true,
     fragile: true,
@@ -543,6 +599,8 @@ export const sourceConfigs: SourceConfig[] = [
     id: "yildiz-teknopark",
     name: "Yıldız Teknopark",
     kind: "html",
+    sourceGroup: "technopark",
+    accessMode: "html",
     url: "https://www.yildizteknopark.com.tr/duyurular",
     enabled: true,
     fragile: false,
@@ -553,6 +611,214 @@ export const sourceConfigs: SourceConfig[] = [
     notes: "Resmî duyuru listesi.",
     collect: scrapeYildizTeknopark,
   }),
+
+  technoparkHtmlSource({
+    id: "innopark-events",
+    name: "InnoPark / Etkinlik ve Duyurular",
+    url: "https://innopark.com.tr/etkinlik-ve-duyurular",
+    fragile: false,
+    category: "Etkinlik ve Programlar",
+    opportunityType: "event",
+    notes:
+      "InnoPark Konya TGB etkinlik, duyuru ve program başvuru kartları.",
+    linkPattern:
+      /innopark\.com\.tr\/(?:etkinlik-ve-duyurular|etkinlik|duyuru|haber|program|basvuru|girisimci|tubitak)[^#]*/i,
+    maxItems: 60,
+  }),
+  technoparkHtmlSource({
+    id: "innopark-incubation-programs",
+    name: "InnoPark / Kuluçka ve Hızlandırma",
+    url: "https://innopark.com.tr/teknoloji-transfer-ofisi-kulucka-ve-hizlandirma-programlari",
+    fragile: false,
+    category: "Etkinlik ve Programlar",
+    opportunityType: "accelerator",
+    notes:
+      "InnoPark kuluçka, ön kuluçka, hızlandırma ve başvuru/program içerikleri.",
+    itemSelector:
+      'main a[href], #content a[href], a[href*="kulucka"], a[href*="hizlandirma"], a[href*="girisimci"], a[href*="basvuru"]',
+    linkPattern:
+      /innopark\.com\.tr\/(?:teknoloji-transfer-ofisi|kulucka|hizlandirma|girisimci|basvuru)[^#]*/i,
+    maxItems: 30,
+  }),
+  technoparkHtmlSource({
+    id: "innopark-tto-supports",
+    name: "InnoPark / TTO ve Girişimcilik Destekleri",
+    url: "https://www.innopark.com.tr/teknoloji-transfer-ofisi",
+    fragile: false,
+    category: "Ulusal Destek ve Fonlar",
+    opportunityType: "funding",
+    notes:
+      "InnoPark TTO proje, patent, girişimcilik ve destek hizmetleri sayfası.",
+    itemSelector:
+      'main a[href], #content a[href], a[href*="patent"], a[href*="destek"], a[href*="girisim"], a[href*="tto"]',
+    linkPattern:
+      /innopark\.com\.tr\/(?:teknoloji-transfer-ofisi|patent|destek|girisim|tto)[^#]*/i,
+    maxItems: 30,
+  }),
+  technoparkHtmlSource({
+    id: "innopark-info-program",
+    name: "InnoPark / Investment for Founders",
+    url: "https://info.innopark.com.tr/",
+    fragile: true,
+    category: "Yatırım ve Sermaye Ağları",
+    opportunityType: "investment",
+    notes:
+      "InnoPark INFO / Investment for Founders girişimci-yatırımcı programı; istemci tarafı içerik empty dönebilir.",
+    itemSelector:
+      'main a[href], #content a[href], a[href*="basvuru"], a[href*="program"], a[href*="founder"], a[href*="invest"]',
+    linkPattern: /(?:info\.)?innopark\.com\.tr\/[^#]*/i,
+    maxItems: 25,
+  }),
+
+  ...[
+    {
+      id: "bilkent-cyberpark",
+      name: "Bilkent CYBERPARK",
+      url: "https://www.cyberpark.com.tr/",
+      pattern: /cyberpark\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "hacettepe-teknokent",
+      name: "Hacettepe Teknokent",
+      url: "https://www.hacettepeteknokent.com.tr/",
+      pattern: /hacettepeteknokent\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "gazi-teknopark",
+      name: "Gazi Teknopark",
+      url: "https://www.gaziteknopark.com.tr/",
+      pattern: /gaziteknopark\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "ankara-universitesi-teknokent",
+      name: "Ankara Üniversitesi Teknokent",
+      url: "https://ankarateknokent.com/",
+      pattern: /ankarateknokent\.com\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "antalya-teknokent",
+      name: "Antalya Teknokent",
+      url: "https://www.antalya-teknokent.com.tr/",
+      pattern: /antalya-teknokent\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "ege-teknopark",
+      name: "Ege Teknopark",
+      url: "https://egeteknopark.com.tr/",
+      pattern: /egeteknopark\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "depark",
+      name: "DEPARK",
+      url: "https://depark.com/",
+      pattern: /depark\.com\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "erciyes-teknopark",
+      name: "Erciyes Teknopark",
+      url: "https://www.erciyesteknopark.com/",
+      pattern: /erciyesteknopark\.com\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "ulutek-teknopark",
+      name: "Ulutek Teknopark",
+      url: "https://www.ulutek.com.tr/",
+      pattern: /ulutek\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "marmara-teknokent",
+      name: "Marmara Teknokent",
+      url: "https://marmarateknokent.com.tr/",
+      pattern: /marmarateknokent\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "konya-teknokent",
+      name: "Konya Teknokent",
+      url: "https://innopark.com.tr/",
+      pattern: /innopark\.com\.tr\/(?:haber|duyuru|etkinlik|program|basvuru|girisim|teknoloji-transfer-ofisi)[^#]*/i,
+      fragile: false,
+    },
+    {
+      id: "mersin-teknopark",
+      name: "Mersin Teknopark",
+      url: "https://www.mersinteknopark.com/",
+      pattern: /mersinteknopark\.com\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "teknopark-izmir",
+      name: "Teknopark İzmir",
+      url: "https://www.teknoparkizmir.com.tr/",
+      pattern: /teknoparkizmir\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "trabzon-teknokent",
+      name: "Trabzon Teknokent",
+      url: "https://trabzonteknokent.com.tr/",
+      pattern: /trabzonteknokent\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "entertech-istanbul-teknokent",
+      name: "Entertech İstanbul Teknokent",
+      url: "https://entertech.com.tr/",
+      pattern: /entertech\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "ostim-teknopark",
+      name: "Ostim Teknopark",
+      url: "https://www.ostimteknopark.com.tr/",
+      pattern: /ostimteknopark\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "teknopark-ankara",
+      name: "Teknopark Ankara",
+      url: "https://www.teknoparkankara.com.tr/",
+      pattern: /teknoparkankara\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "ata-teknokent",
+      name: "Ata Teknokent",
+      url: "https://www.atateknokent.com.tr/",
+      pattern: /atateknokent\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "bursa-teknopark",
+      name: "Bursateknopark",
+      url: "https://www.bursateknopark.com.tr/",
+      pattern: /bursateknopark\.com\.tr\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "samsun-teknopark",
+      name: "Samsun Teknopark",
+      url: "https://samsunteknopark.com/",
+      pattern: /samsunteknopark\.com\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "van-teknokent",
+      name: "Van Teknokent",
+      url: "https://www.vanteknokent.com/",
+      pattern: /vanteknokent\.com\/(?:haber|duyuru|etkinlik|program|kulucka|girisim)[^#]*/i,
+    },
+    {
+      id: "tgbd-member-announcements",
+      name: "TGBD / Teknopark Duyuruları",
+      url: "https://www.tgbd.org.tr/duyurular",
+      pattern: /tgbd\.org\.tr\/(?:.+(?:duyuru|haberi|haber)|duyurular)[^#]*/i,
+      notes:
+        "TGBD üye teknoparkların ortak duyuru/haber arşivi; üye ekosistem sinyali olarak izlenir.",
+    },
+  ].map((source) =>
+    technoparkHtmlSource({
+      id: source.id,
+      name: source.name,
+      url: source.url,
+      fragile: source.fragile ?? true,
+      category: "Etkinlik ve Programlar",
+      opportunityType: "program",
+      notes: source.notes,
+      linkPattern: source.pattern,
+      maxItems: 35,
+    }),
+  ),
 
   htmlSource({
     id: "analiz-gazetesi",
@@ -670,6 +936,8 @@ export const sourceConfigs: SourceConfig[] = [
     name: "Teknopark İstanbul",
     url: "https://www.teknoparkistanbul.com.tr/haberler",
     fragile: true,
+    sourceGroup: "technopark",
+    accessMode: "fragile",
     category: "Etkinlik ve Programlar",
     opportunityType: "program",
     country: "Türkiye",
@@ -689,6 +957,8 @@ export const sourceConfigs: SourceConfig[] = [
     name: "Bilişim Vadisi",
     url: "https://bilisimvadisi.com.tr/",
     fragile: false,
+    sourceGroup: "technopark",
+    accessMode: "html",
     category: "Etkinlik ve Programlar",
     opportunityType: "program",
     country: "Türkiye",
@@ -929,6 +1199,8 @@ export const publicSourceCatalog = sourceConfigs.map((source) => ({
   id: source.id,
   name: source.name,
   kind: source.kind,
+  sourceGroup: source.sourceGroup ?? null,
+  accessMode: source.accessMode ?? (source.fragile ? "fragile" : source.kind),
   url: source.url,
   enabled: source.enabled,
   fragile: source.fragile,

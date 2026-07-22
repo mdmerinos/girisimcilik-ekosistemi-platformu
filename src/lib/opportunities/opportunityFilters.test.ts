@@ -471,6 +471,36 @@ test("source filters recognize named sources and keep other records separate", (
   assert.equal(
     matchesOpportunitySource(
       opportunity({
+        unique_key: "innopark",
+        source_name: "InnoPark / Etkinlik ve Duyurular",
+      }),
+      "technoparks",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
+        unique_key: "cyberpark",
+        source_name: "Bilkent CYBERPARK",
+      }),
+      "technoparks",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
+        unique_key: "techcrunch-not-technopark",
+        source_name: "TechCrunch",
+      }),
+      "technoparks",
+    ),
+    false,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
         unique_key: "other",
         source_name: "TechCrunch",
       }),
