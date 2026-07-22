@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import {
   getLatestIngestionRun,
   getLatestSuccessfulIngestionRun,
@@ -48,9 +50,13 @@ export async function refreshIfStale(
       };
     }
 
-    void runIngestion("cron").catch((error) => {
-      if (error instanceof IngestionAlreadyRunningError) return;
-      console.error("Stale refresh ingestion failed:", error);
+    after(async () => {
+      try {
+        await runIngestion("cron");
+      } catch (error) {
+        if (error instanceof IngestionAlreadyRunningError) return;
+        console.error("Stale refresh ingestion failed:", error);
+      }
     });
 
     return decision;

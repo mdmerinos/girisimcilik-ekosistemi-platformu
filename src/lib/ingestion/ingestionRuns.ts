@@ -8,6 +8,11 @@ import { SOURCE_STATUSES, type SourceStatus } from "@/lib/ingestion/sourceStatus
 export type IngestionTrigger = "manual" | "cron";
 export type IngestionStatus = "running" | "success" | "partial" | "failed";
 
+// API ingestion routes have a 300 second execution limit. A run older than
+// this grace period cannot still be doing useful work in that invocation and
+// must not keep subsequent manual or cron runs locked for hours.
+export const INGESTION_RUN_STALE_AFTER_MS = 6 * 60 * 1000;
+
 export type SourceIngestionResult = {
   sourceId: string;
   sourceName: string;
@@ -121,6 +126,26 @@ export async function finishIngestionRun(
   if (error) throw error;
 }
 
+export async function recoverStaleIngestionRuns(
+  now = new Date(),
+  maxAgeMs = INGESTION_RUN_STALE_AFTER_MS,
+): Promise<string[]> {
+  const staleBefore = new Date(now.getTime() - maxAgeMs).toISOString();
+  const { data, error } = await createAdminSupabaseClient()
+    .from("ingestion_runs")
+    .update({
+      status: "failed",
+      finished_at: now.toISOString(),
+      error_count: 1,
+    })
+    .eq("status", "running")
+    .lt("started_at", staleBefore)
+    .select("id");
+
+  if (error) throw error;
+  return (data ?? []).map((run) => run.id as string);
+}
+
 export async function getRecentIngestionRuns(limit = 50) {
   const supabase = createAdminSupabaseClient();
   const { data: runs, error: runsError } = await supabase
@@ -147,7 +172,9 @@ export async function getRecentIngestionRuns(limit = 50) {
   }));
 }
 
-export async function getRunningIngestionRun(maxAgeMs = 2 * 60 * 60 * 1000) {
+export async function getRunningIngestionRun(
+  maxAgeMs = INGESTION_RUN_STALE_AFTER_MS,
+) {
   const startedAfter = new Date(Date.now() - maxAgeMs).toISOString();
   const { data, error } = await createAdminSupabaseClient()
     .from("ingestion_runs")
@@ -213,6 +240,7 @@ export async function getLatestSourceStatusCounts(runId: string | null) {
 }
 
 export async function getIngestionAdminStats() {
+  await recoverStaleIngestionRuns();
   const supabase = createAdminSupabaseClient();
   const [
     { count: opportunityCount, error: countError },

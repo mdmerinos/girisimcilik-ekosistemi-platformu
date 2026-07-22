@@ -198,6 +198,11 @@ function technoparkHtmlSource(
       summarySelector: "p, .summary, .description, .excerpt, td",
       dateSelector: "time, .date, .tarih, .published, td",
       maxItems: source.maxItems ?? 40,
+      // This inventory intentionally contains broad, occasionally unavailable
+      // public sites. Fail fast so one daily run stays within the serverless
+      // execution window instead of spending three long attempts per site.
+      requestTimeoutMs: 6_000,
+      requestRetries: 0,
     },
   });
 }

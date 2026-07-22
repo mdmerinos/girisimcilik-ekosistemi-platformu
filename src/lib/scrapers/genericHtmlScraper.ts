@@ -27,6 +27,8 @@ export type HtmlScraperOptions = {
   excludeLinkPattern?: RegExp;
   maxItems?: number;
   location?: string | null;
+  requestTimeoutMs?: number;
+  requestRetries?: number;
 };
 
 const DATE_PATTERN =
@@ -46,9 +48,13 @@ export async function scrapeGenericHtml({
   excludeLinkPattern,
   maxItems = 30,
   location = "Türkiye",
+  requestTimeoutMs,
+  requestRetries,
 }: HtmlScraperOptions): Promise<OpportunityInput[]> {
   const html = await fetchTextWithRetry(url, {
     headers: { "content-type": "text/html; charset=utf-8" },
+    timeoutMs: requestTimeoutMs,
+    retries: requestRetries,
   });
   const $ = cheerio.load(html);
   const fetchedAt = new Date().toISOString();

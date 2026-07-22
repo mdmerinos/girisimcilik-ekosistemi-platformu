@@ -454,6 +454,27 @@ test("stage 4 technopark source inventory exposes group and access metadata", ()
   assert.equal(byId.get("teknopark-istanbul")?.accessMode, "fragile");
 });
 
+test("broad technopark inventory sources fail fast without HTTP retries", async () => {
+  const source = sourceConfigs.find(
+    (candidate) => candidate.id === "bilkent-cyberpark",
+  );
+  assert.ok(source);
+
+  const originalFetch = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = async () => {
+    requestCount += 1;
+    return new Response("unavailable", { status: 503 });
+  };
+
+  try {
+    await assert.rejects(() => source.collect(), HttpError);
+    assert.equal(requestCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("cron and manual ingestion use the same enabled source inventory", () => {
   const enabledIds = sourceConfigs
     .filter((source) => source.enabled)
@@ -498,6 +519,16 @@ test("force refresh bypasses freshness but preserves the global cooldown", () =>
     }).status,
     "cooldown",
   );
+});
+
+test("serverless stale refresh keeps background ingestion attached to the request", () => {
+  const source = readFileSync(
+    "src/lib/ingestion/refreshIfStale.ts",
+    "utf8",
+  );
+
+  assert.match(source, /after\(async \(\) =>/);
+  assert.doesNotMatch(source, /void\s+runIngestion/);
 });
 
 test("public refresh result exposes source counts without secrets", () => {

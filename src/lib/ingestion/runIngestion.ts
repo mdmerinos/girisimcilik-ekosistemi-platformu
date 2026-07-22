@@ -2,6 +2,7 @@ import {
   createIngestionRun,
   finishIngestionRun,
   getRunningIngestionRun,
+  recoverStaleIngestionRuns,
   type IngestionStatus,
   type IngestionTrigger,
   type SourceIngestionResult,
@@ -275,19 +276,13 @@ export async function ingestSource(
   return result;
 }
 
-export async function runIngestion(
-  trigger: IngestionTrigger,
+async function executeIngestionRun(
+  runId: string,
 ): Promise<IngestionResult> {
-  const activeRun = await getRunningIngestionRun();
-  if (activeRun) {
-    throw new IngestionAlreadyRunningError(activeRun.id);
-  }
-
-  const runId = await createIngestionRun(trigger);
   const enabledSources = sourceConfigs.filter((source) => source.enabled);
   const sourceResults = await mapWithConcurrency(
     enabledSources,
-    5,
+    8,
     (source) => ingestSource(runId, source),
     async (source, error) => {
       const classified = classifySourceError(error, source.fragile);
@@ -374,4 +369,33 @@ export async function runIngestion(
   });
 
   return { runId, status, sources: sourceResults, totals };
+}
+
+export async function runIngestion(
+  trigger: IngestionTrigger,
+): Promise<IngestionResult> {
+  await recoverStaleIngestionRuns();
+  const activeRun = await getRunningIngestionRun();
+  if (activeRun) {
+    throw new IngestionAlreadyRunningError(activeRun.id);
+  }
+
+  const runId = await createIngestionRun(trigger);
+
+  try {
+    return await executeIngestionRun(runId);
+  } catch (error) {
+    try {
+      await finishIngestionRun(runId, "failed", {
+        collected: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        errorCount: 1,
+      });
+    } catch (finishError) {
+      console.error("Failed ingestion run could not be finalized:", finishError);
+    }
+    throw error;
+  }
 }
