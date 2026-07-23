@@ -8,6 +8,12 @@ export const OPPORTUNITY_CATEGORIES = [
 
 export type OpportunityCategory = (typeof OPPORTUNITY_CATEGORIES)[number];
 
+export type OpportunityPlatform =
+  | "youtube"
+  | "instagram"
+  | "x"
+  | "linkedin";
+
 export type Opportunity = {
   id: string;
   unique_key: string;
@@ -23,6 +29,8 @@ export type Opportunity = {
   fetched_at: string;
   location: string | null;
   is_featured: boolean;
+  platform?: OpportunityPlatform | null;
+  related_technopark?: string | null;
   created_at: string;
   updated_at: string;
 };

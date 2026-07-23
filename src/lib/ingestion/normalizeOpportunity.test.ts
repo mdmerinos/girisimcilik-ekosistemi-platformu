@@ -29,6 +29,30 @@ test("normalizeOpportunity trims fields and accepts the current taxonomy", () =>
   assert.equal(result.location, "Türkiye");
 });
 
+test("normalizeOpportunity preserves social platform and technopark metadata", () => {
+  const result = normalizeOpportunity({
+    unique_key: "social-input-key",
+    title: "  Girişim hızlandırma programı başvuruları başladı ",
+    summary: "Teknoloji girişimleri programa başvurabilir.",
+    category: "Etkinlik ve Programlar",
+    source_name: " İTÜ ARI Teknokent ",
+    source_url: "https://x.com/ariteknokent/status/123",
+    application_url: "https://example.com/basvuru",
+    published_at: "2026-07-22T08:00:00.000Z",
+    deadline_at: null,
+    fetched_at: "2026-07-22T09:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+    platform: "x",
+    related_technopark: " İTÜ ARI Teknokent ",
+  });
+
+  assert.equal(result.platform, "x");
+  assert.equal(result.related_technopark, "İTÜ ARI Teknokent");
+  assert.equal(result.source_name, "İTÜ ARI Teknokent");
+  assert.equal(result.unique_key.length, 64);
+});
+
 test("summary cleaner removes URL labels and HTML", () => {
   const result = cleanOpportunitySummary(
     `<p>Girişimler için yatırım haberi.</p>

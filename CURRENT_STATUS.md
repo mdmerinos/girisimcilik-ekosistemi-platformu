@@ -219,3 +219,20 @@ ODTÜ manuel çalıştırma:
 2. Run workflow.
 3. Step summary içinde collected/inserted/updated sayılarını kontrol et.
 4. `/api/opportunities?source=odtu-teknokent&timeRange=all&limit=10` aç.
+
+## 22 Temmuz 2026 — Aşama 5 sosyal medya kaynak katmanı
+
+- `sourceGroup: social_media` altında YouTube, Instagram, X ve LinkedIn resmî
+  hesap kaynakları eklendi.
+- YouTube Data API, Meta Instagram Graph API ve X API adapterları yalnız env
+  tokenlarıyla çalışır. LinkedIn organizasyon gönderileri rol/onay gerektirdiği
+  için `fragile` ve sınırlı erişim olarak raporlanır.
+- Sosyal kayıtlar platform, bağlı teknopark, paylaşım tarihi ve resmî gönderi
+  URL'siyle ana `normalizeOpportunity` akışından geçer.
+- Site ve sosyal kanaldaki aynı teknopark/başlık kayıtları aynı title identity
+  anahtarında birleşir; web kaydı varsa canonical web URL'si korunur.
+- Ana kaynak filtresine `Sosyal Medya`, admin diagnostics ekranına ayrı sosyal
+  medya grubu eklendi.
+- `005_social_media_sources.sql` migration'ı `platform` ve
+  `related_technopark` alanlarını ekler.
+- Kontroller: typecheck, lint, 107/107 test ve production build başarılı.

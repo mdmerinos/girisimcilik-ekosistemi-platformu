@@ -28,3 +28,18 @@ test("createUniqueKey is stable for equivalent original URLs", () => {
   assert.equal(first, second);
   assert.equal(first.length, 64);
 });
+
+test("createUniqueKey deduplicates the same source title across website and social URLs", () => {
+  const website = createUniqueKey(
+    "İTÜ ARI Teknokent",
+    "https://www.ariteknokent.com.tr/duyuru/bigg-basvurulari",
+    "BiGG hızlandırma programı başvuruları başladı",
+  );
+  const social = createUniqueKey(
+    "İTÜ ARI Teknokent",
+    "https://www.youtube.com/watch?v=official-video",
+    "  BiGG Hızlandırma Programı Başvuruları Başladı! ",
+  );
+
+  assert.equal(website, social);
+});

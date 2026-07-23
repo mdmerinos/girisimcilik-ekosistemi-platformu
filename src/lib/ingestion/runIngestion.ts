@@ -20,6 +20,7 @@ import {
 } from "@/lib/opportunities/opportunityFreshness";
 import {
   sourceConfigs,
+  missingSourceEnv,
   type SourceConfig,
 } from "@/lib/ingestion/sourceConfig";
 import {
@@ -96,7 +97,8 @@ export async function ingestSource(
   };
   let result: SourceIngestionResult;
 
-  if (source.requiredEnv && !process.env[source.requiredEnv]) {
+  const missingEnv = missingSourceEnv(source);
+  if (missingEnv.length > 0) {
     result = {
       ...baseResult,
       status: "skipped",
@@ -105,7 +107,10 @@ export async function ingestSource(
       updated: 0,
       skipped: 0,
       durationMs: Date.now() - startedAt,
-      error: `${source.requiredEnv} tanımlı değil`,
+      error:
+        source.accessMode === "fragile"
+          ? `Sınırlı erişim: ${missingEnv.join(", ")} tanımlı değil.`
+          : `API anahtarı eksik: ${missingEnv.join(", ")} tanımlı değil.`,
       diagnostics: buildSourceDiagnostics({
         fetchUrls: source.fetchUrls ?? [source.url],
         httpStatus: null,

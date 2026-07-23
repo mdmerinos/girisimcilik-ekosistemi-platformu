@@ -471,6 +471,27 @@ test("source filters recognize named sources and keep other records separate", (
   assert.equal(
     matchesOpportunitySource(
       opportunity({
+        unique_key: "social-media",
+        source_name: "İTÜ ARI Teknokent",
+        platform: "youtube",
+      }),
+      "social-media",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
+        unique_key: "website-technopark",
+        source_name: "İTÜ ARI Teknokent",
+      }),
+      "social-media",
+    ),
+    false,
+  );
+  assert.equal(
+    matchesOpportunitySource(
+      opportunity({
         unique_key: "innopark",
         source_name: "InnoPark / Etkinlik ve Duyurular",
       }),

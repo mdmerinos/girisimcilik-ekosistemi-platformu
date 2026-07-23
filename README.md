@@ -78,10 +78,20 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 INGESTION_SECRET=your_long_random_ingestion_secret
 CRON_SECRET=your_long_random_cron_secret
 SAM_GOV_API_KEY=your_optional_sam_gov_api_key
+YOUTUBE_DATA_API_KEY=your_optional_youtube_data_api_key
+META_INSTAGRAM_ACCESS_TOKEN=your_optional_meta_instagram_access_token
+META_INSTAGRAM_ITU_ARI_ACCOUNT_ID=your_optional_instagram_business_account_id
+X_BEARER_TOKEN=your_optional_x_api_bearer_token
+LINKEDIN_ACCESS_TOKEN=your_optional_linkedin_access_token
 ```
 
 `SAM_GOV_API_KEY` isteğe bağlıdır. Tanımlanmazsa SAM.gov kaynağı güvenli
 şekilde `skipped` olur.
+
+Sosyal medya anahtarları da isteğe bağlıdır. Eksik YouTube, Instagram veya X
+anahtarı ilgili kaynağı güvenli biçimde `skipped` yapar. LinkedIn organizasyon
+gönderileri platform onayı ve sayfa rolü gerektirdiğinden admin panelinde
+`sınırlı erişim` olarak gösterilir. Token değerleri istemciye gönderilmez.
 
 ## Supabase migration kurulumu
 
@@ -91,6 +101,7 @@ Aşağıdaki dosyaları sırayla uygulayın:
 2. `supabase/migrations/002_ingestion_observability.sql`
 3. `supabase/migrations/003_expand_ingestion_statuses.sql`
 4. `supabase/migrations/004_add_opportunity_media_fields.sql`
+5. `supabase/migrations/005_social_media_sources.sql`
 
 Her dosya için:
 

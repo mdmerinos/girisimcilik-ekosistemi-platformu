@@ -3,6 +3,7 @@ import { z } from "zod";
 import { applyInvestmentCategoryPriority } from "@/lib/ingestion/investmentClassification";
 import { cleanOpportunitySummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import { resolveOpportunityUrl } from "@/lib/utils/opportunityUrl";
+import { createUniqueKey } from "@/lib/utils/createUniqueKey";
 import { normalizeText } from "@/lib/utils/normalizeText";
 import { OPPORTUNITY_CATEGORIES, type OpportunityInput } from "@/types/opportunity";
 
@@ -20,6 +21,8 @@ const opportunitySchema = z.object({
   fetched_at: z.iso.datetime(),
   location: z.string().nullable(),
   is_featured: z.boolean(),
+  platform: z.enum(["youtube", "instagram", "x", "linkedin"]).nullable(),
+  related_technopark: z.string().nullable(),
 });
 
 function normalizeImageUrl(value: string | null | undefined): string | null {
@@ -39,6 +42,11 @@ export function normalizeOpportunity(input: OpportunityInput): OpportunityInput 
 
   const normalized = opportunitySchema.parse({
     ...input,
+    unique_key: createUniqueKey(
+      input.source_name,
+      sourceUrl,
+      title,
+    ),
     title,
     summary: cleanOpportunitySummary(input.summary, title),
     source_name: normalizeText(input.source_name),
@@ -46,6 +54,10 @@ export function normalizeOpportunity(input: OpportunityInput): OpportunityInput 
     application_url: resolveOpportunityUrl(input.application_url, sourceUrl),
     image_url: normalizeImageUrl(input.image_url),
     location: input.location ? normalizeText(input.location) : null,
+    platform: input.platform ?? null,
+    related_technopark: input.related_technopark
+      ? normalizeText(input.related_technopark)
+      : null,
   });
 
   return applyInvestmentCategoryPriority(normalized);

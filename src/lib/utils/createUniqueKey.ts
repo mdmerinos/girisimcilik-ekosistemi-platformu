@@ -19,14 +19,28 @@ export function normalizeOriginalUrl(value: string): string {
   return url.toString();
 }
 
-export function createUniqueKey(sourceName: string, originalUrl: string): string {
+export function createUniqueKey(
+  sourceName: string,
+  originalUrl: string,
+  title?: string | null,
+): string {
   const normalizedSource = sourceName
     .normalize("NFKC")
     .trim()
     .toLocaleLowerCase("tr-TR");
   const normalizedUrl = normalizeOriginalUrl(originalUrl);
+  const normalizedTitle = title
+    ?.normalize("NFKD")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const identity = normalizedTitle
+    ? `${normalizedSource}:title:${normalizedTitle}`
+    : `${normalizedSource}:url:${normalizedUrl}`;
 
   return createHash("sha256")
-    .update(`${normalizedSource}:${normalizedUrl}`)
+    .update(identity)
     .digest("hex");
 }

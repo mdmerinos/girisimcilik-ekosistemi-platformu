@@ -91,6 +91,7 @@ type AdminStats = {
   sourceCount: number;
   enabledSourceCount: number;
   fragileSourceCount: number;
+  socialMediaSourceCount: number;
   lastOpportunityUpdate: string | null;
   lastSuccessfulIngestionAt: string | null;
   lastAttemptAt: string | null;
@@ -105,11 +106,19 @@ type AdminStats = {
 type SourceCatalogItem = {
   id: string;
   name: string;
+  displayName: string;
   kind: "rss" | "html" | "api";
   fragile: boolean;
   requiresApiKey: boolean;
   configured: boolean;
   notes: string;
+  sourceGroup: "technopark" | "social_media" | null;
+  accessMode: "rss" | "html" | "api" | "public" | "fragile";
+  platform: "youtube" | "instagram" | "x" | "linkedin" | null;
+  officialAccountUrl: string | null;
+  relatedTechnopark: string | null;
+  keywords: string[];
+  missingEnv: string[];
 };
 
 function formatDate(value: string | null): string {
@@ -334,7 +343,7 @@ export function IngestionControl() {
       )}
 
       {adminStats && (
-        <div className="mt-8 grid gap-3 sm:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:grid-cols-4">
           {[
             ["Toplam opportunities", adminStats.opportunityCount],
             [
@@ -342,6 +351,7 @@ export function IngestionControl() {
               `${adminStats.enabledSourceCount}/${adminStats.sourceCount}`,
             ],
             ["Fragile kaynaklar", adminStats.fragileSourceCount],
+            ["Sosyal medya", adminStats.socialMediaSourceCount],
           ].map(([label, value]) => (
             <div key={label} className="rounded-xl bg-[#f5f7f3] p-4">
               <p className="text-xs text-[#748078]">{label}</p>
@@ -427,6 +437,82 @@ export function IngestionControl() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {sourceRows.some(({ source }) => source.sourceGroup === "social_media") && (
+        <section className="mt-8">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-[#25372c]">
+                Sosyal medya kaynakları
+              </h2>
+              <p className="mt-1 text-xs text-[#748078]">
+                Resmî hesaplar ayrı sourceGroup altında izlenir; token değerleri
+                hiçbir zaman bu ekrana gönderilmez.
+              </p>
+            </div>
+            <span className="rounded-full bg-[#edf3e8] px-3 py-1 text-[10px] font-bold text-[#607d40]">
+              sourceGroup: social_media
+            </span>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {sourceRows
+              .filter(({ source }) => source.sourceGroup === "social_media")
+              .map(({ source, latestLog }) => (
+                <article
+                  key={source.id}
+                  className="rounded-2xl border border-[#dfe5df] bg-white p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#25372c]">
+                        {source.displayName}
+                      </h3>
+                      <p className="mt-1 text-[10px] text-[#748078]">
+                        {source.id} · {source.relatedTechnopark}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#f3f6f1] px-2 py-1 text-[10px] font-bold uppercase text-[#607d40]">
+                      {source.platform}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+                    <span className="rounded-full bg-[#f5f7f3] px-2 py-1 text-[#5e6d63]">
+                      {source.accessMode}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-1 ${
+                        source.configured
+                          ? "bg-[#edf7e8] text-[#477033]"
+                          : source.accessMode === "fragile"
+                            ? "bg-[#fff0dc] text-[#9a5a11]"
+                            : "bg-[#f2f0eb] text-[#655f55]"
+                      }`}
+                    >
+                      {source.configured
+                        ? latestLog?.status ?? "hazır"
+                        : source.accessMode === "fragile"
+                          ? "sınırlı erişim"
+                          : "API anahtarı eksik"}
+                    </span>
+                  </div>
+                  {!source.configured && (
+                    <p className="mt-3 text-[10px] leading-4 text-[#78684a]">
+                      Eksik env: {source.missingEnv.join(", ")}
+                    </p>
+                  )}
+                  <a
+                    href={source.officialAccountUrl ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-block text-[10px] font-semibold text-[#607d40] underline"
+                  >
+                    Resmî hesabı aç
+                  </a>
+                </article>
+              ))}
+          </div>
+        </section>
       )}
 
       {sourceRows.length > 0 && (

@@ -20,6 +20,11 @@ import {
 import { scrapeRss } from "@/lib/scrapers/rssScraper";
 import { fetchSamGov } from "@/lib/scrapers/samGovApi";
 import {
+  collectSocialMediaSource,
+  socialMediaSourceDefinitions,
+  type SocialMediaPlatform,
+} from "@/lib/ingestion/socialMediaSources";
+import {
   scrapeTubitak,
   scrapeTubitakBigg,
 } from "@/lib/scrapers/tubitakScraper";
@@ -32,8 +37,8 @@ import type {
 } from "@/types/opportunity";
 
 export type SourceKind = "rss" | "html" | "api";
-export type SourceGroup = "technopark";
-export type SourceAccessMode = SourceKind | "fragile";
+export type SourceGroup = "technopark" | "social_media";
+export type SourceAccessMode = SourceKind | "public" | "fragile";
 export type OpportunityType =
   | "funding"
   | "investment"
@@ -53,7 +58,13 @@ export type SourceConfig = {
   enabled: boolean;
   fragile: boolean;
   requiresApiKey: boolean;
-  requiredEnv?: string;
+  requiredEnv?: string | string[];
+  platform?: SocialMediaPlatform;
+  sourceSlug?: string;
+  displayName?: string;
+  officialAccountUrl?: string;
+  relatedTechnopark?: string;
+  keywords?: string[];
   category: OpportunityCategory;
   opportunityType: OpportunityType;
   country: string;
@@ -152,6 +163,17 @@ function htmlSource(options: HtmlSourceOptions): SourceConfig {
 
 function configuredSource(source: SourceConfig): SourceConfig {
   return source;
+}
+
+export function sourceRequiredEnvNames(source: SourceConfig): string[] {
+  if (!source.requiredEnv) return [];
+  return Array.isArray(source.requiredEnv)
+    ? source.requiredEnv
+    : [source.requiredEnv];
+}
+
+export function missingSourceEnv(source: SourceConfig): string[] {
+  return sourceRequiredEnvNames(source).filter((name) => !process.env[name]);
 }
 
 type TechnoparkHtmlInventoryItem = {
@@ -1198,6 +1220,34 @@ export const sourceConfigs: SourceConfig[] = [
       maxItems: 50,
     },
   }),
+  ...socialMediaSourceDefinitions.map((socialSource) =>
+    configuredSource({
+      id: socialSource.sourceSlug,
+      sourceSlug: socialSource.sourceSlug,
+      name: socialSource.displayName,
+      displayName: socialSource.displayName,
+      kind: "api",
+      sourceGroup: "social_media",
+      accessMode: socialSource.accessMode,
+      platform: socialSource.platform,
+      url: socialSource.officialAccountUrl,
+      officialAccountUrl: socialSource.officialAccountUrl,
+      relatedTechnopark: socialSource.relatedTechnopark,
+      keywords: socialSource.keywords,
+      enabled: socialSource.enabled,
+      fragile: socialSource.accessMode === "fragile",
+      requiresApiKey: true,
+      requiredEnv: socialSource.requiredEnv,
+      category: "Haber ve Sosyal Medya Akışı",
+      opportunityType: "news",
+      country: "Türkiye",
+      notes:
+        socialSource.accessMode === "fragile"
+          ? "Resmî API erişimi organizasyon rolü ve platform onayı gerektirir; sınırlı erişim olarak izlenir."
+          : `Resmî ${socialSource.platform} API kaynağı; token yalnız env üzerinden okunur.`,
+      collect: () => collectSocialMediaSource(socialSource),
+    }),
+  ),
 ];
 
 export const publicSourceCatalog = sourceConfigs.map((source) => ({
@@ -1214,6 +1264,13 @@ export const publicSourceCatalog = sourceConfigs.map((source) => ({
   opportunityType: source.opportunityType,
   country: source.country,
   notes: source.notes,
-  configured:
-    !source.requiredEnv || Boolean(process.env[source.requiredEnv]),
+  sourceSlug: source.sourceSlug ?? source.id,
+  displayName: source.displayName ?? source.name,
+  platform: source.platform ?? null,
+  officialAccountUrl: source.officialAccountUrl ?? null,
+  relatedTechnopark: source.relatedTechnopark ?? null,
+  keywords: source.keywords ?? [],
+  requiredEnv: sourceRequiredEnvNames(source),
+  missingEnv: missingSourceEnv(source),
+  configured: missingSourceEnv(source).length === 0,
 }));

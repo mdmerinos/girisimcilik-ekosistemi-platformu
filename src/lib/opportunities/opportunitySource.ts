@@ -9,6 +9,7 @@ export const OPPORTUNITY_SOURCES = [
   "grants-gov",
   "odtu-teknokent",
   "technoparks",
+  "social-media",
   "nato-diana",
   "nasa-sbir",
   "other",
@@ -27,13 +28,14 @@ export const OPPORTUNITY_SOURCE_OPTIONS: Array<{
   { value: "grants-gov", label: "Grants.gov" },
   { value: "odtu-teknokent", label: "ODTÜ Teknokent" },
   { value: "technoparks", label: "Teknoparklar" },
+  { value: "social-media", label: "Sosyal Medya" },
   { value: "nato-diana", label: "NATO DIANA" },
   { value: "nasa-sbir", label: "NASA SBIR/STTR" },
   { value: "other", label: "Diğer" },
 ];
 
 const SOURCE_TERMS: Record<
-  Exclude<OpportunitySource, "all" | "other">,
+  Exclude<OpportunitySource, "all" | "other" | "social-media">,
   string[]
 > = {
   tubitak: ["tubitak"],
@@ -58,7 +60,7 @@ const SOURCE_TERMS: Record<
 };
 
 function matchesKnownSource(
-  item: Pick<Opportunity, "source_name" | "title">,
+  item: Pick<Opportunity, "source_name" | "title" | "platform">,
   source: keyof typeof SOURCE_TERMS,
 ) {
   const normalized = normalizeSearchText(
@@ -70,11 +72,13 @@ function matchesKnownSource(
 }
 
 export function matchesOpportunitySource(
-  item: Pick<Opportunity, "source_name" | "title">,
+  item: Pick<Opportunity, "source_name" | "title" | "platform">,
   source: OpportunitySource,
 ): boolean {
   if (source === "all") return true;
+  if (source === "social-media") return Boolean(item.platform);
   if (source === "other") {
+    if (item.platform) return false;
     return !Object.keys(SOURCE_TERMS).some((knownSource) =>
       matchesKnownSource(item, knownSource as keyof typeof SOURCE_TERMS),
     );

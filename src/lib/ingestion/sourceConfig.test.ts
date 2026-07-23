@@ -26,7 +26,14 @@ import { getOpportunityDateDisplay } from "@/lib/opportunities/opportunityDate";
 import { calculateOpportunityStats } from "@/lib/opportunities/opportunityStats";
 import { decideRefreshIfStale } from "@/lib/ingestion/refreshDecision";
 import { toPublicIngestionResult } from "@/lib/ingestion/publicIngestionResult";
-import { sourceConfigs } from "@/lib/ingestion/sourceConfig";
+import {
+  sourceConfigs,
+  sourceRequiredEnvNames,
+} from "@/lib/ingestion/sourceConfig";
+import {
+  collectSocialMediaSource,
+  socialMediaSourceDefinitions,
+} from "@/lib/ingestion/socialMediaSources";
 import {
   classifySourceError,
   EmptySourceError,
@@ -452,6 +459,82 @@ test("stage 4 technopark source inventory exposes group and access metadata", ()
   assert.equal(byId.get("innopark-events")?.fragile, false);
   assert.equal(byId.get("innopark-info-program")?.accessMode, "fragile");
   assert.equal(byId.get("teknopark-istanbul")?.accessMode, "fragile");
+});
+
+test("stage 5 social media sources expose safe operational metadata", () => {
+  const sources = sourceConfigs.filter(
+    (source) => source.sourceGroup === "social_media",
+  );
+
+  assert.ok(sources.length >= 7);
+  assert.deepEqual(
+    new Set(sources.map((source) => source.platform)),
+    new Set(["youtube", "instagram", "x", "linkedin"]),
+  );
+  for (const source of sources) {
+    assert.equal(source.sourceSlug, source.id);
+    assert.equal(source.displayName, source.name);
+    assert.ok(source.officialAccountUrl?.startsWith("https://"));
+    assert.ok(source.relatedTechnopark);
+    assert.ok(source.keywords?.includes("girişim"));
+    assert.ok(["api", "public", "fragile"].includes(source.accessMode ?? ""));
+    assert.ok(sourceRequiredEnvNames(source).length > 0);
+  }
+  assert.ok(
+    sources
+      .filter((source) => source.platform === "linkedin")
+      .every((source) => source.accessMode === "fragile"),
+  );
+});
+
+test("YouTube social collector maps only matching official posts without leaking the key", async () => {
+  const source = socialMediaSourceDefinitions.find(
+    (candidate) => candidate.sourceSlug === "itu-ari-youtube",
+  );
+  assert.ok(source);
+  let requestedUrl = "";
+  let apiKeyHeader = "";
+
+  const items = await collectSocialMediaSource(source, {
+    env: { NODE_ENV: "test", YOUTUBE_DATA_API_KEY: "test-secret-key" },
+    now: () => new Date("2026-07-22T12:00:00.000Z"),
+    fetchJson: async (url, init) => {
+      requestedUrl = url;
+      apiKeyHeader = new Headers(init?.headers).get("x-goog-api-key") ?? "";
+      return {
+        items: [
+          {
+            id: { videoId: "video-1" },
+            snippet: {
+              title: "BiGG hızlandırma programı başvuruları başladı",
+              description:
+                "Teknoloji girişimleri için program detayları https://example.com/basvuru",
+              publishedAt: "2026-07-22T08:00:00.000Z",
+              thumbnails: {
+                high: { url: "https://img.youtube.com/video-1.jpg" },
+              },
+            },
+          },
+          {
+            id: { videoId: "video-2" },
+            snippet: {
+              title: "Kurumsal bayram mesajı",
+              description: "Kutlu olsun.",
+              publishedAt: "2026-07-21T08:00:00.000Z",
+            },
+          },
+        ],
+      };
+    },
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].platform, "youtube");
+  assert.equal(items[0].related_technopark, "İTÜ ARI Teknokent");
+  assert.equal(items[0].category, "Etkinlik ve Programlar");
+  assert.equal(items[0].application_url, "https://example.com/basvuru");
+  assert.equal(requestedUrl.includes("test-secret-key"), false);
+  assert.equal(apiKeyHeader, "test-secret-key");
 });
 
 test("broad technopark inventory sources fail fast without HTTP retries", async () => {

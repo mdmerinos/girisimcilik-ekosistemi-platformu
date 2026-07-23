@@ -274,6 +274,9 @@ export async function getIngestionAdminStats() {
     sourceCount: sourceConfigs.length,
     enabledSourceCount: sourceConfigs.filter((source) => source.enabled).length,
     fragileSourceCount: sourceConfigs.filter((source) => source.fragile).length,
+    socialMediaSourceCount: sourceConfigs.filter(
+      (source) => source.sourceGroup === "social_media",
+    ).length,
     lastOpportunityUpdate: latestRows?.[0]?.fetched_at ?? null,
     lastSuccessfulIngestionAt: latestSuccessfulRun?.finished_at ?? null,
     lastAttemptAt: latestRun?.started_at ?? null,
