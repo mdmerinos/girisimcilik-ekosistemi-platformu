@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { fetchTextWithRetry } from "@/lib/ingestion/fetchWithRetry";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import { buildSpecificFallbackDescription } from "@/lib/opportunities/specificFallbackDescription";
+import { parseDate } from "@/lib/utils/parseDate";
 import { normalizeText } from "@/lib/utils/normalizeText";
 import type { OpportunityInput } from "@/types/opportunity";
 
@@ -21,6 +22,18 @@ const DETAIL_SOURCE_IDS = new Set([
 const MAX_DETAIL_REQUESTS_PER_SOURCE = 16;
 const DETAIL_CONCURRENCY = 4;
 const MAX_DESCRIPTION_LENGTH = 380;
+
+export type OpportunityDetail = {
+  description: string | null;
+  publishedAt: string | null;
+  canonicalUrl: string | null;
+  imageUrl: string | null;
+};
+
+export type DescriptionEnrichmentOptions = {
+  force?: boolean;
+  allowFallback?: boolean;
+};
 
 function comparable(value: string): string {
   return value
@@ -130,6 +143,72 @@ function findJsonLdDescriptions(value: unknown): string[] {
   ];
 }
 
+function findJsonLdDates(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(findJsonLdDates);
+  if (!value || typeof value !== "object") return [];
+
+  const record = value as Record<string, unknown>;
+  const dates = [record.datePublished, record.dateCreated]
+    .filter((date): date is string => typeof date === "string");
+  return [
+    ...dates,
+    ...findJsonLdDates(record["@graph"]),
+    ...findJsonLdDates(record.mainEntity),
+  ];
+}
+
+function absoluteHttpUrl(
+  value: string | null | undefined,
+  pageUrl: string,
+): string | null {
+  if (!value || !URL.canParse(value, pageUrl)) return null;
+  const url = new URL(value, pageUrl);
+  return ["http:", "https:"].includes(url.protocol) ? url.toString() : null;
+}
+
+export function extractPublishedAtFromHtml(html: string): string | null {
+  const $ = cheerio.load(html);
+  const candidates: string[] = [];
+  const add = (value: string | null | undefined) => {
+    if (value) candidates.push(value);
+  };
+
+  for (const selector of [
+    'meta[property="article:published_time"]',
+    'meta[property="og:published_time"]',
+    'meta[name="date"]',
+    'meta[name="publish-date"]',
+    'meta[name="datePublished"]',
+    'meta[itemprop="datePublished"]',
+  ]) {
+    add($(selector).first().attr("content"));
+  }
+  add($("time[datetime]").first().attr("datetime"));
+  add(
+    $(
+      "time, .date, .tarih, .published, .publish-date, [itemprop='datePublished']",
+    )
+      .first()
+      .text(),
+  );
+
+  $('script[type="application/ld+json"]').each((_, element) => {
+    try {
+      for (const date of findJsonLdDates(JSON.parse($(element).text()))) {
+        add(date);
+      }
+    } catch {
+      // Invalid third-party JSON-LD must not invalidate the detail page.
+    }
+  });
+
+  for (const candidate of candidates) {
+    const parsed = parseDate(normalizeText(candidate));
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 export function extractDescriptionFromHtml(
   html: string,
   title: string,
@@ -201,6 +280,14 @@ export async function fetchOpportunityDescription(
   title: string,
   timeoutMs = 4_000,
 ): Promise<string | null> {
+  return (await fetchOpportunityDetail(url, title, timeoutMs))?.description ?? null;
+}
+
+export async function fetchOpportunityDetail(
+  url: string,
+  title: string,
+  timeoutMs = 4_000,
+): Promise<OpportunityDetail | null> {
   if (!URL.canParse(url)) return null;
 
   try {
@@ -209,7 +296,20 @@ export async function fetchOpportunityDescription(
       retries: 0,
       headers: { accept: "text/html,application/xhtml+xml" },
     });
-    return extractDescriptionFromHtml(html, title);
+    const $ = cheerio.load(html);
+    return {
+      description: extractDescriptionFromHtml(html, title),
+      publishedAt: extractPublishedAtFromHtml(html),
+      canonicalUrl: absoluteHttpUrl(
+        $('link[rel="canonical"]').first().attr("href"),
+        url,
+      ),
+      imageUrl: absoluteHttpUrl(
+        $('meta[property="og:image"]').first().attr("content") ??
+          $('meta[name="twitter:image"]').first().attr("content"),
+        url,
+      ),
+    };
   } catch {
     return null;
   }
@@ -218,39 +318,52 @@ export async function fetchOpportunityDescription(
 export async function enrichOpportunityDescriptions(
   items: OpportunityInput[],
   sourceId: string,
+  options: DescriptionEnrichmentOptions = {},
 ): Promise<OpportunityInput[]> {
-  if (!DETAIL_SOURCE_IDS.has(sourceId)) return items;
+  if (!options.force && !DETAIL_SOURCE_IDS.has(sourceId)) return items;
 
-  const badIndexes = items
+  const incompleteIndexes = items
     .map((item, index) =>
-      isBadDescription(item.summary, item.title) ? index : -1,
+      isBadDescription(item.summary, item.title) || !item.published_at
+        ? index
+        : -1,
     )
     .filter((index) => index >= 0);
-  const indexesToFetch = badIndexes.slice(0, MAX_DETAIL_REQUESTS_PER_SOURCE);
-  const extractedDescriptions = await mapWithConcurrency(
+  const indexesToFetch = incompleteIndexes.slice(
+    0,
+    MAX_DETAIL_REQUESTS_PER_SOURCE,
+  );
+  const extractedDetails = await mapWithConcurrency(
     indexesToFetch,
     DETAIL_CONCURRENCY,
     async (index) => {
       const item = items[index];
       const url = item.application_url ?? item.source_url;
-      return fetchOpportunityDescription(url, item.title);
+      return fetchOpportunityDetail(url, item.title);
     },
     async () => null,
   );
   const extractedByIndex = new Map(
     indexesToFetch.map((index, position) => [
       index,
-      extractedDescriptions[position],
+      extractedDetails[position],
     ]),
   );
 
   return items.map((item, index) => {
-    if (!badIndexes.includes(index)) return item;
+    if (!incompleteIndexes.includes(index)) return item;
+    const detail = extractedByIndex.get(index);
+    const badDescription = isBadDescription(item.summary, item.title);
     return {
       ...item,
-      summary:
-        extractedByIndex.get(index) ??
-        buildSpecificFallbackDescription(item),
+      summary: badDescription
+        ? detail?.description ??
+          (options.allowFallback === true
+            ? buildSpecificFallbackDescription(item)
+            : item.summary)
+        : item.summary,
+      published_at: item.published_at ?? detail?.publishedAt ?? null,
+      image_url: item.image_url ?? detail?.imageUrl ?? null,
     };
   });
 }

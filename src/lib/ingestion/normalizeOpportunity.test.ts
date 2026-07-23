@@ -53,6 +53,25 @@ test("normalizeOpportunity preserves social platform and technopark metadata", (
   assert.equal(result.unique_key.length, 64);
 });
 
+test("normalizeOpportunity never invents a summary for missing real content", () => {
+  const result = normalizeOpportunity({
+    unique_key: "missing-summary",
+    title: "Teknoloji girişimleri için açık program",
+    summary: "https://example.com/program",
+    category: "Etkinlik ve Programlar",
+    source_name: "Örnek Teknokent",
+    source_url: "https://example.com/program/gercek-duyuru",
+    application_url: null,
+    published_at: "2026-07-22T08:00:00.000Z",
+    deadline_at: null,
+    fetched_at: "2026-07-22T09:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+  });
+
+  assert.equal(result.summary, null);
+});
+
 test("summary cleaner removes URL labels and HTML", () => {
   const result = cleanOpportunitySummary(
     `<p>Girişimler için yatırım haberi.</p>

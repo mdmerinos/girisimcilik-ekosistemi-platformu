@@ -1,6 +1,10 @@
+import * as cheerio from "cheerio";
+
+import { fetchTextWithRetry } from "@/lib/ingestion/fetchWithRetry";
 import { scrapeDiana } from "@/lib/scrapers/dianaScraper";
 import { fetchEuFunding } from "@/lib/scrapers/euFundingApi";
 import {
+  parseGenericHtml,
   scrapeGenericHtml,
   type HtmlScraperOptions,
 } from "@/lib/scrapers/genericHtmlScraper";
@@ -193,40 +197,99 @@ type TechnoparkHtmlInventoryItem = {
 function technoparkHtmlSource(
   source: TechnoparkHtmlInventoryItem,
 ): SourceConfig {
-  return htmlSource({
+  const category = source.category ?? "Etkinlik ve Programlar";
+  const scraper: HtmlScraperOptions = {
+    url: source.url,
+    sourceName: source.name,
+    category,
+    location: "Türkiye",
+    itemSelector:
+      source.itemSelector ??
+      'main article a[href], main .card a[href], main .post a[href], #content a[href], a[href*="duyuru"], a[href*="haber"], a[href*="etkinlik"], a[href*="program"], a[href*="basvuru"]',
+    linkPattern: source.linkPattern,
+    excludeLinkPattern:
+      source.excludeLinkPattern ??
+      /\/(?:kategori|category|etiket|tag|author|yazar|arama|search|login|giris|iletisim|contact|kurumsal|hakkimizda|about)(?:\/|$)/i,
+    containerSelector:
+      "article, .card, .post, .news, .news-item, .duyuru, .event, .etkinlik, li, tr, section, div",
+    titleSelector: "h1, h2, h3, h4, h5, .title, .baslik",
+    summarySelector: "p, .summary, .description, .excerpt, td",
+    dateSelector: "time, .date, .tarih, .published, td",
+    maxItems: source.maxItems ?? 40,
+    // This inventory intentionally contains broad, occasionally unavailable
+    // public sites. Fail fast so one daily run stays within the serverless
+    // execution window instead of spending three long attempts per site.
+    requestTimeoutMs: 6_000,
+    requestRetries: 0,
+  };
+  const collectDetailed = async () => {
+    const html = await fetchTextWithRetry(source.url, {
+      timeoutMs: scraper.requestTimeoutMs,
+      retries: scraper.requestRetries,
+      headers: { accept: "text/html,application/xhtml+xml" },
+    });
+    const $ = cheerio.load(html);
+    const feedUrls = [
+      ...new Set(
+        $('link[rel="alternate"][type*="rss"], link[rel="alternate"][type*="atom"]')
+          .toArray()
+          .map((element) => $(element).attr("href"))
+          .filter((href): href is string => Boolean(href))
+          .filter((href) => URL.canParse(href, source.url))
+          .map((href) => new URL(href, source.url).toString()),
+      ),
+    ].slice(0, 2);
+    const attemptedUrls = [source.url, ...feedUrls];
+
+    for (const feedUrl of feedUrls) {
+      try {
+        const items = await scrapeRss({
+          feedUrl,
+          sourceName: source.name,
+          category,
+          maxItems: source.maxItems ?? 40,
+          location: "Türkiye",
+        });
+        if (items.length > 0) {
+          return {
+            items,
+            attemptedUrls,
+            fallbackStatus: "success" as const,
+          };
+        }
+      } catch {
+        // A declared feed may be stale or invalid; the official HTML remains
+        // the authoritative fallback.
+      }
+    }
+
+    return {
+      items: parseGenericHtml(html, scraper),
+      attemptedUrls,
+      fallbackStatus:
+        feedUrls.length > 0 ? ("failed" as const) : ("not_needed" as const),
+    };
+  };
+
+  return {
     id: source.id,
     name: source.name,
+    kind: "html",
     url: source.url,
+    enabled: true,
     fragile: source.fragile ?? true,
+    requiresApiKey: false,
     sourceGroup: "technopark",
     accessMode: (source.fragile ?? true) ? "fragile" : "html",
-    category: source.category ?? "Etkinlik ve Programlar",
+    category,
     opportunityType: source.opportunityType ?? "program",
     country: "Türkiye",
     notes:
       source.notes ??
       "TGBD üyesi teknopark public duyuru/haber/program sayfası; erişim kısıtı varsa fragile raporlanır.",
-    scraper: {
-      itemSelector:
-        source.itemSelector ??
-        'main article a[href], main .card a[href], main .post a[href], #content a[href], a[href*="duyuru"], a[href*="haber"], a[href*="etkinlik"], a[href*="program"], a[href*="basvuru"]',
-      linkPattern: source.linkPattern,
-      excludeLinkPattern:
-        source.excludeLinkPattern ??
-        /\/(?:kategori|category|etiket|tag|author|yazar|arama|search|login|giris|iletisim|contact|kurumsal|hakkimizda|about)(?:\/|$)/i,
-      containerSelector:
-        "article, .card, .post, .news, .news-item, .duyuru, .event, .etkinlik, li, tr, section, div",
-      titleSelector: "h1, h2, h3, h4, h5, .title, .baslik",
-      summarySelector: "p, .summary, .description, .excerpt, td",
-      dateSelector: "time, .date, .tarih, .published, td",
-      maxItems: source.maxItems ?? 40,
-      // This inventory intentionally contains broad, occasionally unavailable
-      // public sites. Fail fast so one daily run stays within the serverless
-      // execution window instead of spending three long attempts per site.
-      requestTimeoutMs: 6_000,
-      requestRetries: 0,
-    },
-  });
+    collect: async () => (await collectDetailed()).items,
+    collectDetailed,
+  };
 }
 
 export const sourceConfigs: SourceConfig[] = [

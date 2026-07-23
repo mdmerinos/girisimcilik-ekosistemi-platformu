@@ -32,6 +32,7 @@ type SourceResult = {
       old: number;
       relevance: number;
       invalid: number;
+      quality: number;
       duplicate: number;
     };
     upserted: number;
@@ -668,6 +669,7 @@ export function IngestionControl() {
                       <div>Arşiv: {diagnostics.filtered.archive}</div>
                       <div>Eski: {diagnostics.filtered.old}</div>
                       <div>Kapsam dışı: {diagnostics.filtered.relevance}</div>
+                      <div>Gerçek veri yok: {diagnostics.filtered.quality}</div>
                       <div>Geçersiz: {diagnostics.filtered.invalid}</div>
                     </div>
                     <p className="mt-3 text-xs text-[#5e6d63]">

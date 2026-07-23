@@ -88,9 +88,11 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
         <h3 className="atlas-text text-lg font-semibold leading-7 tracking-[-0.02em]">
           {opportunity.title}
         </h3>
-        <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
-          {summaryDisplay.text}
-        </p>
+        {summaryDisplay.text && (
+          <p className="atlas-muted mt-3 line-clamp-3 text-sm leading-6">
+            {summaryDisplay.text}
+          </p>
+        )}
         {showExplanationButton && (
           <div className="mt-3">
             <button

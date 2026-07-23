@@ -175,8 +175,8 @@ export function getCardSummaryDisplay(
   }
 
   return {
-    text: buildTurkishExplanation(opportunity),
-    usesTurkishFallback: true,
+    text: "",
+    usesTurkishFallback: false,
   };
 }
 

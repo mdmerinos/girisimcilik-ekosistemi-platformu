@@ -12,6 +12,11 @@ import {
 } from "@/lib/ingestion/investmentClassification";
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { buildSourceDiagnostics } from "@/lib/ingestion/sourceDiagnostics";
+import {
+  filterRealSourceItems,
+  hasRealOpportunityEvidence,
+  inspectRealOpportunityEvidence,
+} from "@/lib/ingestion/realOpportunityEvidence";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import {
   isWorkerAuthorized,
@@ -373,6 +378,7 @@ test("source diagnostics report filters, duplicates and upsert results", () => {
       old: 0,
       relevance: 0,
       invalid: 0,
+      quality: 0,
       duplicate: 1,
     },
     inserted: 1,
@@ -485,6 +491,88 @@ test("stage 5 social media sources expose safe operational metadata", () => {
       .filter((source) => source.platform === "linkedin")
       .every((source) => source.accessMode === "fragile"),
   );
+  assert.ok(
+    sources
+      .filter((source) => source.platform === "instagram")
+      .every((source) => source.accessMode === "fragile"),
+  );
+});
+
+test("real-content evidence requires title, description, date and a detail URL", () => {
+  const valid = {
+    title: "Girişim hızlandırma programı başvuruları başladı",
+    summary:
+      "Teknoloji girişimlerine mentorluk, yatırımcı görüşmeleri ve ürün geliştirme desteği sunan programın yeni dönem başvuruları açıldı.",
+    source_url: "https://teknopark.example/haber/program-basvurulari",
+    published_at: "2026-07-22T08:00:00.000Z",
+    platform: null,
+  };
+
+  assert.equal(
+    hasRealOpportunityEvidence(valid, "https://teknopark.example/haberler"),
+    true,
+  );
+
+  const placeholder = inspectRealOpportunityEvidence(
+    {
+      ...valid,
+      summary:
+        "Bu kayıt şu kaynakta şu kategoride listelenen bir teknopark içeriğidir.",
+      source_url: "https://teknopark.example/haberler",
+      published_at: null,
+    },
+    "https://teknopark.example/haberler",
+  );
+  assert.equal(placeholder.valid, false);
+  assert.deepEqual(
+    new Set(placeholder.reasons),
+    new Set(["description", "date", "originalUrl"]),
+  );
+});
+
+test("technopark placeholder records stay out of the main flow and appear in diagnostics", () => {
+  const source = {
+    sourceGroup: "technopark",
+    url: "https://example.com/duyurular",
+  } as const;
+  const placeholder = {
+    unique_key: "placeholder-record",
+    title: "Girişim programı duyurusu",
+    summary:
+      "Bu kayıt şu kaynakta şu kategoride listelenen genel bir açıklamadır.",
+    category: "Etkinlik ve Programlar" as const,
+    source_name: "Test Teknokent",
+    source_url: "https://example.com/duyurular",
+    application_url: null,
+    image_url: null,
+    published_at: null,
+    deadline_at: null,
+    fetched_at: "2026-07-22T09:00:00.000Z",
+    location: "Türkiye",
+    is_featured: false,
+  };
+  const filtered = filterRealSourceItems([placeholder], source);
+  const diagnostics = buildSourceDiagnostics({
+    fetchUrls: [source.url],
+    httpStatus: 200,
+    collected: [placeholder],
+    accepted: filtered.items,
+    filtered: {
+      archive: 0,
+      old: 0,
+      relevance: 0,
+      invalid: 0,
+      quality: filtered.rejectedCount,
+      duplicate: 0,
+    },
+    inserted: 0,
+    updated: 0,
+  });
+
+  assert.equal(filtered.items.length, 0);
+  assert.equal(filtered.rejectedCount, 1);
+  assert.equal(diagnostics.accepted, 0);
+  assert.equal(diagnostics.filtered.quality, 1);
 });
 
 test("YouTube social collector maps only matching official posts without leaking the key", async () => {
@@ -553,6 +641,58 @@ test("broad technopark inventory sources fail fast without HTTP retries", async 
   try {
     await assert.rejects(() => source.collect(), HttpError);
     assert.equal(requestCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("technopark collectors prefer an official RSS feed declared by the page", async () => {
+  const source = sourceConfigs.find(
+    (candidate) => candidate.id === "innopark-events",
+  );
+  assert.ok(source?.collectDetailed);
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("official-feed.xml")) {
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0">
+          <channel>
+            <title>InnoPark Duyuruları</title>
+            <item>
+              <title>Teknoloji girişimleri için hızlandırma programı</title>
+              <link>https://innopark.com.tr/duyuru/hizlandirma-programi</link>
+              <description>Teknoloji girişimlerine mentorluk ve yatırımcı görüşmeleri sunan resmî hızlandırma programının başvuruları açıldı.</description>
+              <pubDate>Wed, 22 Jul 2026 08:00:00 GMT</pubDate>
+            </item>
+          </channel>
+        </rss>`);
+    }
+
+    return new Response(`
+      <html>
+        <head>
+          <link rel="alternate" type="application/rss+xml"
+            href="/official-feed.xml">
+        </head>
+      </html>
+    `);
+  };
+
+  try {
+    const result = await source.collectDetailed();
+    assert.equal(result.fallbackStatus, "success");
+    assert.equal(result.items.length, 1);
+    assert.equal(
+      result.items[0].source_url,
+      "https://innopark.com.tr/duyuru/hizlandirma-programi",
+    );
+    assert.ok(
+      result.attemptedUrls.includes(
+        "https://innopark.com.tr/official-feed.xml",
+      ),
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

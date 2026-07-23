@@ -77,7 +77,7 @@ export const socialMediaSourceDefinitions: SocialMediaSourceDefinition[] = [
     platform: "instagram",
     officialAccountUrl: "https://www.instagram.com/ariteknokent/",
     relatedTechnopark: "İTÜ ARI Teknokent",
-    accessMode: "api",
+    accessMode: "fragile",
     enabled: true,
     keywords: commonKeywords,
     requiredEnv: [

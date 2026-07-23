@@ -37,6 +37,7 @@ export type SourceIngestionResult = {
       old: number;
       relevance: number;
       invalid: number;
+      quality: number;
       duplicate: number;
     };
     upserted: number;

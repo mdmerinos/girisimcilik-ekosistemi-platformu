@@ -6,6 +6,7 @@ import {
   type ContentView,
 } from "@/lib/opportunities/opportunityQueryFilters";
 import { selectRecentOpportunities } from "@/lib/opportunities/recentOpportunities";
+import { filterStage5OpportunitiesForDisplay } from "@/lib/opportunities/stage5OpportunityVisibility";
 import {
   createAdminSupabaseClient,
   isSupabaseConfigured,
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await createAdminSupabaseClient()
       .from("opportunities")
       .select(
-        "id,unique_key,title,summary,category,source_name,source_url,application_url,image_url,published_at,deadline_at,fetched_at,location,is_featured,created_at,updated_at",
+        "id,unique_key,title,summary,category,source_name,source_url,application_url,image_url,published_at,deadline_at,fetched_at,location,is_featured,platform,related_technopark,created_at,updated_at",
       )
       .gt("created_at", since.toISOString())
       .order("created_at", { ascending: false })
@@ -79,7 +80,10 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    const recent = selectRecentOpportunities((data ?? []) as Opportunity[], {
+    const visible = filterStage5OpportunitiesForDisplay(
+      (data ?? []) as Opportunity[],
+    );
+    const recent = selectRecentOpportunities(visible, {
       since,
       contentView: parsed.data.view,
       now,

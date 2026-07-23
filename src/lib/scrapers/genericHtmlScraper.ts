@@ -35,6 +35,19 @@ const DATE_PATTERN =
   /\b(\d{1,2}[./-]\d{1,2}[./-]\d{4}|\d{1,2}\s+(?:Oca|Şub|Mar|Nis|May|Haz|Tem|Ağu|Eyl|Eki|Kas|Ara)[a-zçğıöşü]*\s+\d{4})\b/i;
 
 export async function scrapeGenericHtml({
+  ...options
+}: HtmlScraperOptions): Promise<OpportunityInput[]> {
+  const html = await fetchTextWithRetry(options.url, {
+    headers: { accept: "text/html,application/xhtml+xml" },
+    timeoutMs: options.requestTimeoutMs,
+    retries: options.requestRetries,
+  });
+  return parseGenericHtml(html, options);
+}
+
+export function parseGenericHtml(
+  html: string,
+  {
   url,
   sourceName,
   category,
@@ -50,12 +63,10 @@ export async function scrapeGenericHtml({
   location = "Türkiye",
   requestTimeoutMs,
   requestRetries,
-}: HtmlScraperOptions): Promise<OpportunityInput[]> {
-  const html = await fetchTextWithRetry(url, {
-    headers: { "content-type": "text/html; charset=utf-8" },
-    timeoutMs: requestTimeoutMs,
-    retries: requestRetries,
-  });
+}: HtmlScraperOptions,
+): OpportunityInput[] {
+  void requestTimeoutMs;
+  void requestRetries;
   const $ = cheerio.load(html);
   const fetchedAt = new Date().toISOString();
   const results = new Map<string, OpportunityInput>();

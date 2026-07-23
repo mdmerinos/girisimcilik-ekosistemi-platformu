@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { applyInvestmentCategoryPriority } from "@/lib/ingestion/investmentClassification";
-import { cleanOpportunitySummary } from "@/lib/scrapers/cleanOpportunitySummary";
+import { extractCleanSummary } from "@/lib/scrapers/cleanOpportunitySummary";
 import { resolveOpportunityUrl } from "@/lib/utils/opportunityUrl";
 import { createUniqueKey } from "@/lib/utils/createUniqueKey";
 import { normalizeText } from "@/lib/utils/normalizeText";
@@ -48,7 +48,7 @@ export function normalizeOpportunity(input: OpportunityInput): OpportunityInput 
       title,
     ),
     title,
-    summary: cleanOpportunitySummary(input.summary, title),
+    summary: extractCleanSummary(input.summary, title),
     source_name: normalizeText(input.source_name),
     source_url: sourceUrl,
     application_url: resolveOpportunityUrl(input.application_url, sourceUrl),

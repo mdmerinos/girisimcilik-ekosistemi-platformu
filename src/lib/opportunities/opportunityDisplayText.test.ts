@@ -13,6 +13,7 @@ import {
 import {
   enrichOpportunityDescriptions,
   extractDescriptionFromHtml,
+  extractPublishedAtFromHtml,
   fetchOpportunityDescription,
 } from "@/lib/ingestion/extractOpportunityDescription";
 import type { Opportunity } from "@/types/opportunity";
@@ -60,7 +61,7 @@ test("Turkish summary is displayed without an unnecessary explanation button", (
   assert.equal(shouldShowTurkishExplanationButton(item), false);
 });
 
-test("posted boilerplate displays Turkish fallback directly without a button", () => {
+test("posted boilerplate does not create a placeholder description", () => {
   const item = opportunity({
     source_name: "Grants.gov",
     summary: "DFOP001281 · Bureau Of Educational and Cultural Affairs · posted",
@@ -70,15 +71,8 @@ test("posted boilerplate displays Turkish fallback directly without a button", (
 
   assert.equal(isBadSummary(item.summary, item.title), true);
   assert.equal(getOriginalSummaryForCard(item), null);
-  assert.equal(display.usesTurkishFallback, true);
-  assert.match(display.text, new RegExp(item.title));
-  assert.match(display.text, /Grants\.gov/);
-  assert.match(display.text, /Uluslararası Fonlar/);
-  assert.match(display.text, /Son başvuru tarihi: 28\.07\.2026\.$/);
-  assert.doesNotMatch(
-    display.text,
-    /Kaynakta anlamlı kısa açıklama bulunamadı/,
-  );
+  assert.equal(display.usesTurkishFallback, false);
+  assert.equal(display.text, "");
   assert.equal(shouldShowTurkishExplanationButton(item), false);
 });
 
@@ -117,7 +111,7 @@ test("deadline is appended only when a valid stored deadline exists", () => {
   assert.doesNotMatch(withDeadline, /(?:tutar|bütçe|milyon|milyar)/i);
 });
 
-test("specific fallback changes with the title and rejects title repetition", () => {
+test("title repetition does not become a generated card summary", () => {
   const first = opportunity({
     title: "Birinci KOSGEB çağrısı",
     summary: "Birinci KOSGEB çağrısı",
@@ -133,12 +127,8 @@ test("specific fallback changes with the title and rejects title repetition", ()
 
   assert.equal(isBadSummary(first.summary, first.title), true);
   assert.equal(isBadSummary(second.summary, second.title), true);
-  assert.notEqual(
-    getCardSummaryDisplay(first).text,
-    getCardSummaryDisplay(second).text,
-  );
-  assert.match(getCardSummaryDisplay(first).text, /Birinci KOSGEB çağrısı/);
-  assert.match(getCardSummaryDisplay(second).text, /İkinci KOSGEB programı/);
+  assert.equal(getCardSummaryDisplay(first).text, "");
+  assert.equal(getCardSummaryDisplay(second).text, "");
 });
 
 test("description extractor follows meta, OG and JSON-LD priority", () => {
@@ -197,6 +187,21 @@ test("description extractor reads objective, synopsis, scope and abstract fields
   }
 });
 
+test("detail extractor reads publication dates from metadata and JSON-LD", () => {
+  assert.equal(
+    extractPublishedAtFromHtml(
+      '<meta property="article:published_time" content="2026-07-22T08:30:00Z">',
+    ),
+    "2026-07-22T08:30:00.000Z",
+  );
+  assert.equal(
+    extractPublishedAtFromHtml(
+      '<script type="application/ld+json">{"@type":"NewsArticle","datePublished":"2026-07-21T10:00:00Z"}</script>',
+    ),
+    "2026-07-21T10:00:00.000Z",
+  );
+});
+
 test("KOSGEB description enrichment uses the real detail page when available", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
@@ -236,7 +241,7 @@ test("KOSGEB description enrichment uses the real detail page when available", a
   }
 });
 
-test("blocked detail pages return fallback without breaking enrichment", async () => {
+test("blocked detail pages do not fabricate a fallback description", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response("", { status: 403 });
 
@@ -270,9 +275,7 @@ test("blocked detail pages return fallback without breaking enrichment", async (
       "grants-gov",
     );
 
-    assert.match(enriched.summary ?? "", /Community exchange opportunity/);
-    assert.match(enriched.summary ?? "", /Grants\.gov/);
-    assert.doesNotMatch(enriched.summary ?? "", /\d{2}\.\d{2}\.\d{4}/);
+    assert.equal(enriched.summary, "posted");
   } finally {
     globalThis.fetch = originalFetch;
   }

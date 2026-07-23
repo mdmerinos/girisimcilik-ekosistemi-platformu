@@ -19,6 +19,7 @@ import {
   calculateOpportunityStats,
   type OpportunityStats,
 } from "@/lib/opportunities/opportunityStats";
+import { filterStage5OpportunitiesForDisplay } from "@/lib/opportunities/stage5OpportunityVisibility";
 import {
   createAdminSupabaseClient,
   isSupabaseConfigured,
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const filteredOpportunities = filterOpportunityRows(
-      opportunities,
+      filterStage5OpportunitiesForDisplay(opportunities),
       {
         ...parsed.data,
         contentView: parsed.data.view,

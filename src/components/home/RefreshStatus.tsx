@@ -16,6 +16,7 @@ type PublicSourceResult = {
       old: number;
       relevance: number;
       invalid: number;
+      quality: number;
       duplicate: number;
     };
     reason: string;
@@ -117,6 +118,8 @@ export function RefreshStatus({ state }: { state: RefreshState | null }) {
                       Ham {source.diagnostics.raw}, kabul{" "}
                       {source.diagnostics.accepted}, yeni {source.inserted},
                       duplicate {source.diagnostics.filtered.duplicate},
+                      gerçek veri kanıtı yok{" "}
+                      {source.diagnostics.filtered.quality},
                       elenen {source.skipped}.
                     </p>
                   )}

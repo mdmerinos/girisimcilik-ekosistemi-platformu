@@ -13,6 +13,7 @@ import { enrichOpportunityDescriptions } from "@/lib/ingestion/extractOpportunit
 import { isEntrepreneurshipRelevant } from "@/lib/ingestion/isEntrepreneurshipRelevant";
 import { mapWithConcurrency } from "@/lib/ingestion/mapWithConcurrency";
 import { normalizeOpportunity } from "@/lib/ingestion/normalizeOpportunity";
+import { filterRealSourceItems } from "@/lib/ingestion/realOpportunityEvidence";
 import { buildSourceDiagnostics } from "@/lib/ingestion/sourceDiagnostics";
 import {
   hasArchiveSignal,
@@ -121,6 +122,7 @@ export async function ingestSource(
           old: 0,
           relevance: 0,
           invalid: 0,
+          quality: 0,
           duplicate: 0,
         },
         inserted: 0,
@@ -151,12 +153,19 @@ export async function ingestSource(
       const descriptionEnriched = await enrichOpportunityDescriptions(
         freshnessFiltered,
         source.id,
+        {
+          force: source.sourceGroup === "technopark",
+          allowFallback: false,
+        },
       );
+      const realContent = filterRealSourceItems(descriptionEnriched, source);
+      const realContentItems = realContent.items;
+      const qualitySkippedCount = realContent.rejectedCount;
       const normalized: OpportunityInput[] = [];
       let invalidCount = 0;
       let relevanceSkippedCount = 0;
 
-      for (const item of descriptionEnriched) {
+      for (const item of realContentItems) {
         try {
           const normalizedItem = applyInvestmentCategoryPriority(
             normalizeOpportunity(item),
@@ -195,6 +204,7 @@ export async function ingestSource(
             ? "skipped"
             : invalidCount > 0 ||
                 relevanceSkippedCount > 0 ||
+                qualitySkippedCount > 0 ||
                 freshnessSkippedCount > 0 ||
                 duplicateCount > 0
             ? "partial"
@@ -210,11 +220,16 @@ export async function ingestSource(
           invalidCount +
           duplicateCount +
           relevanceSkippedCount +
+          qualitySkippedCount +
           freshnessSkippedCount,
         durationMs: Date.now() - startedAt,
         error:
           freshnessSkippedCount > 0
             ? `${freshnessSkippedCount} eski/arşiv kayıt güncel akıştan çıkarıldı.`
+            : qualitySkippedCount > 0
+              ? qualitySkippedCount === descriptionEnriched.length
+                ? "Gerçek içerik kanıtı eksik: başlık, açıklama, yayın tarihi ve orijinal bağlantı doğrulanamadı."
+                : `${qualitySkippedCount} kayıt gerçek içerik kanıtı eksik olduğu için ana akışa alınmadı.`
             : relevanceSkippedCount > 0
             ? relevanceSkippedCount === collected.length
               ? "Girişimcilik kapsamı dışında olduğu için atlandı."
@@ -231,6 +246,7 @@ export async function ingestSource(
             old: oldSkippedCount,
             relevance: relevanceSkippedCount,
             invalid: invalidCount,
+            quality: qualitySkippedCount,
             duplicate: duplicateCount,
           },
           inserted: upsert.inserted,
@@ -262,6 +278,7 @@ export async function ingestSource(
             old: 0,
             relevance: 0,
             invalid: 0,
+            quality: 0,
             duplicate: 0,
           },
           inserted: 0,
@@ -314,6 +331,7 @@ async function executeIngestionRun(
             old: 0,
             relevance: 0,
             invalid: 0,
+            quality: 0,
             duplicate: 0,
           },
           inserted: 0,

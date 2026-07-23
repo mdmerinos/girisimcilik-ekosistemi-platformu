@@ -19,6 +19,7 @@ import {
   resolveTodayFilter,
 } from "@/lib/opportunities/opportunityQueryFilters";
 import { OPPORTUNITY_SOURCES } from "@/lib/opportunities/opportunitySource";
+import { filterStage5OpportunitiesForDisplay } from "@/lib/opportunities/stage5OpportunityVisibility";
 import {
   createAdminSupabaseClient,
   isSupabaseConfigured,
@@ -90,9 +91,10 @@ function prepareResponse(
   } = options;
   const offset = (page - 1) * limit;
   const now = new Date();
+  const visibleRows = filterStage5OpportunitiesForDisplay(rows);
 
   const scopedRows = filterOpportunityRows(
-    rows,
+    visibleRows,
     {
       countryGroup,
       contentView: view,
@@ -105,7 +107,7 @@ function prepareResponse(
     now,
   );
   const filterDiagnostics = getOpportunityFilterDiagnostics(
-    rows,
+    visibleRows,
     {
       category,
       countryGroup,
@@ -120,7 +122,7 @@ function prepareResponse(
   );
 
   const lastDataAddedAt =
-    rows
+    visibleRows
       .map((item) => item.created_at)
       .filter(Boolean)
       .sort()
